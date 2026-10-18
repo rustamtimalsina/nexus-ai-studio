@@ -1,13 +1,15 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { audioService } from '../services/audioService';
+
+export type AITheme = 'quantum' | 'cyber' | 'solar';
 
 interface AI3DCoreProps {
   isGenerating: boolean;
   isTyping?: boolean;
   isListening?: boolean;
   isSpeaking?: boolean;
-  mode?: 'orb' | 'quantum' | 'hologram';
+  theme?: AITheme;
   className?: string;
 }
 
@@ -16,17 +18,21 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
   isTyping,
   isListening,
   isSpeaking,
-  mode = 'orb',
+  theme = 'quantum',
   className = '',
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const stateRef = useRef({ isGenerating, isTyping, isListening, isSpeaking });
-  stateRef.current = { isGenerating, isTyping, isListening, isSpeaking };
-  const [currentLevel, setCurrentLevel] = useState(0);
+  const stateRef = useRef({ isGenerating, isTyping, isListening, isSpeaking, theme });
+  stateRef.current = { isGenerating, isTyping, isListening, isSpeaking, theme };
 
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
+
+    // Clear previous children if any
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
 
     const width = container.clientWidth || 320;
     const height = container.clientHeight || 320;
@@ -41,6 +47,46 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
+    // Color definitions based on theme
+    const themeConfig = {
+      quantum: {
+        sphereColor: 0x06b6d4, // Cyan
+        sphereEmissive: 0x0891b2,
+        icoColor: 0x10b981, // Emerald
+        ring1Color: 0x38bdf8, // Sky
+        ring2Color: 0xa855f7, // Purple
+        light1: 0x06b6d4,
+        light2: 0x10b981,
+        p1: new THREE.Color(0x06b6d4),
+        p2: new THREE.Color(0x10b981),
+        p3: new THREE.Color(0x38bdf8),
+      },
+      cyber: {
+        sphereColor: 0xa855f7, // Purple
+        sphereEmissive: 0x7c3aed,
+        icoColor: 0xec4899, // Pink
+        ring1Color: 0xd946ef, // Fuchsia
+        ring2Color: 0x06b6d4, // Cyan
+        light1: 0xd946ef,
+        light2: 0x8b5cf6,
+        p1: new THREE.Color(0xa855f7),
+        p2: new THREE.Color(0xec4899),
+        p3: new THREE.Color(0x06b6d4),
+      },
+      solar: {
+        sphereColor: 0xf59e0b, // Amber
+        sphereEmissive: 0xd97706,
+        icoColor: 0xef4444, // Red
+        ring1Color: 0xfbbf24, // Gold
+        ring2Color: 0xf97316, // Orange
+        light1: 0xf59e0b,
+        light2: 0xef4444,
+        p1: new THREE.Color(0xf59e0b),
+        p2: new THREE.Color(0xef4444),
+        p3: new THREE.Color(0xfbbf24),
+      },
+    }[theme];
+
     // 2. 3D Elements Group
     const mainGroup = new THREE.Group();
     scene.add(mainGroup);
@@ -48,8 +94,8 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     // A. Inner glowing nucleus sphere
     const sphereGeo = new THREE.SphereGeometry(0.85, 32, 32);
     const sphereMat = new THREE.MeshPhongMaterial({
-      color: 0x06b6d4, // Cyan
-      emissive: 0x0891b2,
+      color: themeConfig.sphereColor,
+      emissive: themeConfig.sphereEmissive,
       emissiveIntensity: 0.6,
       wireframe: true,
       transparent: true,
@@ -61,7 +107,7 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     // B. Outer Icosahedron wireframe
     const icoGeo = new THREE.IcosahedronGeometry(1.35, 1);
     const icoMat = new THREE.MeshBasicMaterial({
-      color: 0x10b981, // Emerald green
+      color: themeConfig.icoColor,
       wireframe: true,
       transparent: true,
       opacity: 0.5,
@@ -72,7 +118,7 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     // C. Orbital Hologram Ring 1
     const ringGeo1 = new THREE.TorusGeometry(1.6, 0.015, 16, 100);
     const ringMat1 = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      color: themeConfig.ring1Color,
       transparent: true,
       opacity: 0.7,
     });
@@ -83,7 +129,7 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     // D. Orbital Hologram Ring 2
     const ringGeo2 = new THREE.TorusGeometry(1.75, 0.012, 16, 100);
     const ringMat2 = new THREE.MeshBasicMaterial({
-      color: 0xa855f7, // Purple
+      color: themeConfig.ring2Color,
       transparent: true,
       opacity: 0.6,
     });
@@ -92,15 +138,11 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     mainGroup.add(ring2);
 
     // E. Quantum Particle Swarm
-    const particleCount = 320;
+    const particleCount = 340;
     const particleGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
     const basePositions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
-
-    const c1 = new THREE.Color(0x06b6d4);
-    const c2 = new THREE.Color(0x10b981);
-    const c3 = new THREE.Color(0xd946ef); // Magenta
 
     for (let i = 0; i < particleCount; i++) {
       const radius = 1.3 + Math.random() * 1.1;
@@ -119,7 +161,8 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
       basePositions[i * 3 + 1] = y;
       basePositions[i * 3 + 2] = z;
 
-      const chosenColor = Math.random() > 0.6 ? c1 : Math.random() > 0.3 ? c2 : c3;
+      const chosenColor =
+        Math.random() > 0.6 ? themeConfig.p1 : Math.random() > 0.3 ? themeConfig.p2 : themeConfig.p3;
       colors[i * 3] = chosenColor.r;
       colors[i * 3 + 1] = chosenColor.g;
       colors[i * 3 + 2] = chosenColor.b;
@@ -142,11 +185,11 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
-    const pointLight1 = new THREE.PointLight(0x06b6d4, 2, 50);
+    const pointLight1 = new THREE.PointLight(themeConfig.light1, 2, 50);
     pointLight1.position.set(3, 3, 3);
     scene.add(pointLight1);
 
-    const pointLight2 = new THREE.PointLight(0x10b981, 1.8, 50);
+    const pointLight2 = new THREE.PointLight(themeConfig.light2, 1.8, 50);
     pointLight2.position.set(-3, -3, 2);
     scene.add(pointLight2);
 
@@ -178,9 +221,8 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     window.addEventListener('resize', handleResize);
 
     // Animation Loop
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
     let animationFrameId: number;
-    let frameCounter = 0;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
@@ -197,87 +239,53 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
       if (activeListening || activeSpeaking) {
         audioLevel = audioService.getAudioLevel();
         if (audioLevel === 0) {
-          // Synthetic speech pulsation if mic level is quiet
-          audioLevel = Math.abs(Math.sin(elapsedTime * 8)) * 0.45;
+          audioLevel = (Math.sin(elapsedTime * 8) + 1) * 0.25;
         }
       }
 
-      frameCounter++;
-      if (frameCounter % 6 === 0) {
-        setCurrentLevel(audioLevel);
-      }
-
-      const isAudioActive = activeListening || activeSpeaking;
-      const speedFactor = activeGenerating
-        ? 2.8
-        : isAudioActive
-        ? 2.2 + audioLevel * 3.0
-        : activeTyping
-        ? 1.6
-        : 1.0;
-
-      // Mouse follow damping
+      // Parallax mouse damping
       targetX += (mouseX - targetX) * 0.05;
       targetY += (mouseY - targetY) * 0.05;
 
-      mainGroup.rotation.y = targetX * 0.8 + elapsedTime * 0.25 * speedFactor;
-      mainGroup.rotation.x = targetY * 0.8 + Math.sin(elapsedTime * 0.5) * 0.15;
+      mainGroup.rotation.y = targetX * 0.4 + elapsedTime * 0.2;
+      mainGroup.rotation.x = -targetY * 0.4;
 
-      // Audio-reactive scale pulse
-      const basePulse = Math.sin(elapsedTime * (activeGenerating ? 6 : isAudioActive ? 10 : 2.5)) * 0.08 + 1.0;
-      const audioScale = basePulse + audioLevel * 0.5;
-      innerSphere.scale.set(audioScale, audioScale, audioScale);
-      innerSphere.rotation.y += 0.015 * speedFactor;
+      // State dynamic speeds
+      const speedMultiplier = activeGenerating ? 2.5 : activeTyping ? 1.4 : activeListening ? 1.8 : 1.0;
 
-      // Rings oscillate with audio frequency
-      const ringScale1 = 1.0 + audioLevel * 0.45;
-      const ringScale2 = 1.0 + audioLevel * 0.35;
-      ring1.scale.set(ringScale1, ringScale1, ringScale1);
-      ring2.scale.set(ringScale2, ringScale2, ringScale2);
-      ring1.rotation.z += (0.02 + audioLevel * 0.08) * speedFactor;
-      ring2.rotation.z -= (0.018 + audioLevel * 0.07) * speedFactor;
+      // 1. Inner Sphere Pulsing
+      const sphereScale =
+        1 + Math.sin(elapsedTime * 3 * speedMultiplier) * 0.08 + audioLevel * 0.35;
+      innerSphere.scale.set(sphereScale, sphereScale, sphereScale);
+      innerSphere.rotation.y += 0.015 * speedMultiplier;
+      innerSphere.rotation.x += 0.008 * speedMultiplier;
 
-      // Particles scatter with audio energy
-      const posAttr = particleGeo.getAttribute('position') as THREE.BufferAttribute;
-      const posArray = posAttr.array as Float32Array;
-      const particleExpansion = 1.0 + audioLevel * 0.6;
+      // 2. Outer Icosahedron Counter-Rotation
+      const icoScale =
+        1 + Math.cos(elapsedTime * 2 * speedMultiplier) * 0.05 + audioLevel * 0.25;
+      outerIco.scale.set(icoScale, icoScale, icoScale);
+      outerIco.rotation.y -= 0.01 * speedMultiplier;
+      outerIco.rotation.z += 0.005 * speedMultiplier;
+
+      // 3. Holographic Orbital Rings
+      ring1.rotation.z += 0.02 * speedMultiplier;
+      ring2.rotation.x += 0.015 * speedMultiplier;
+
+      // 4. Particle Wave Motion
+      const posAttr = particleGeo.attributes.position as THREE.BufferAttribute;
+      const posArr = posAttr.array as Float32Array;
 
       for (let i = 0; i < particleCount; i++) {
-        posArray[i * 3] = basePositions[i * 3] * particleExpansion;
-        posArray[i * 3 + 1] = basePositions[i * 3 + 1] * particleExpansion;
-        posArray[i * 3 + 2] = basePositions[i * 3 + 2] * particleExpansion;
+        const bx = basePositions[i * 3];
+        const by = basePositions[i * 3 + 1];
+        const bz = basePositions[i * 3 + 2];
+
+        const wave = Math.sin(elapsedTime * 2.5 + bx * 2 + by * 2) * (0.08 + audioLevel * 0.2);
+        posArr[i * 3] = bx * (1 + wave);
+        posArr[i * 3 + 1] = by * (1 + wave);
+        posArr[i * 3 + 2] = bz * (1 + wave);
       }
       posAttr.needsUpdate = true;
-
-      particles.rotation.y += (0.006 + audioLevel * 0.04) * speedFactor;
-      particles.rotation.x = Math.sin(elapsedTime * 0.3) * 0.2;
-
-      // Reactive Color & Emission Shift
-      if (activeListening) {
-        // Listening to User (Electric Magenta / Neon Purple)
-        sphereMat.emissive.setHex(0xd946ef);
-        icoMat.color.setHex(0xf43f5e);
-        pointLight1.color.setHex(0xd946ef);
-        pointLight1.intensity = 3.5 + audioLevel * 4;
-      } else if (activeSpeaking) {
-        // AI Speaking aloud (Electric Cyan / Aqua Blue)
-        sphereMat.emissive.setHex(0x06b6d4);
-        icoMat.color.setHex(0x38bdf8);
-        pointLight1.color.setHex(0x06b6d4);
-        pointLight1.intensity = 3.0 + audioLevel * 4;
-      } else if (activeGenerating) {
-        // Thinking / Generating (Amber / Solar Gold)
-        sphereMat.emissive.setHex(0xf59e0b);
-        icoMat.color.setHex(0x38bdf8);
-        pointLight1.color.setHex(0xf59e0b);
-        pointLight1.intensity = 3.5;
-      } else {
-        // Calm Idle (Emerald / Cyan)
-        sphereMat.emissive.setHex(0x0891b2);
-        icoMat.color.setHex(0x10b981);
-        pointLight1.color.setHex(0x06b6d4);
-        pointLight1.intensity = 2;
-      }
 
       renderer.render(scene, camera);
     };
@@ -285,68 +293,30 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     animate();
 
     return () => {
+      cancelAnimationFrame(animationFrameId);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationFrameId);
+      renderer.dispose();
+      sphereGeo.dispose();
+      sphereMat.dispose();
+      icoGeo.dispose();
+      icoMat.dispose();
+      ringGeo1.dispose();
+      ringMat1.dispose();
+      ringGeo2.dispose();
+      ringMat2.dispose();
+      particleGeo.dispose();
+      particleMat.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
-      renderer.dispose();
     };
-  }, []);
+  }, [theme]);
 
   return (
-    <div className={`relative flex items-center justify-center select-none ${className}`}>
-      {/* 3D WebGL Canvas */}
-      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-
-      {/* Floating State & Audio Equalizer HUD */}
-      <div className="absolute bottom-3 flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-cyan-500/30 text-[11px] font-mono text-cyan-300 shadow-xl shadow-black/60">
-        <span
-          className={`w-2.5 h-2.5 rounded-full ${
-            isListening
-              ? 'bg-fuchsia-400 animate-ping'
-              : isSpeaking
-              ? 'bg-cyan-400 animate-pulse'
-              : isGenerating
-              ? 'bg-amber-400 animate-ping'
-              : 'bg-emerald-400 animate-pulse'
-          }`}
-        />
-        <span className="font-bold tracking-wider">
-          {isListening
-            ? 'LISTENING TO VOICE...'
-            : isSpeaking
-            ? 'SPEAKING RESPONSE...'
-            : isGenerating
-            ? 'NEURAL REASONING...'
-            : isTyping
-            ? 'TYPING INPUT...'
-            : '3D VOICE CORE READY'}
-        </span>
-
-        {/* Real-time Frequency Waveform Bars */}
-        {(isListening || isSpeaking) && (
-          <div className="flex items-end gap-1 h-3 ml-1">
-            <span
-              className="w-1 bg-cyan-400 rounded-full transition-all duration-75"
-              style={{ height: `${Math.max(3, currentLevel * 14)}px` }}
-            />
-            <span
-              className="w-1 bg-fuchsia-400 rounded-full transition-all duration-75"
-              style={{ height: `${Math.max(5, currentLevel * 20)}px` }}
-            />
-            <span
-              className="w-1 bg-emerald-400 rounded-full transition-all duration-75"
-              style={{ height: `${Math.max(4, currentLevel * 16)}px` }}
-            />
-            <span
-              className="w-1 bg-sky-400 rounded-full transition-all duration-75"
-              style={{ height: `${Math.max(3, currentLevel * 12)}px` }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
+    <div
+      ref={mountRef}
+      className={`relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none ${className}`}
+    />
   );
 };

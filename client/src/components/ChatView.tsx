@@ -10,11 +10,20 @@ import {
   Activity,
   Zap,
   Menu,
+  Download,
+  Edit3,
+  Check,
+  Volume2,
+  VolumeX,
+  Palette,
+  Search,
 } from 'lucide-react';
 import { ChatSession, Message, Workspace } from '../types';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
-import { AI3DCore } from './AI3DCore';
+import { AI3DCore, AITheme } from './AI3DCore';
+import { ArtifactData } from './ArtifactCanvas';
+import { soundService } from '../services/soundService';
 
 interface ChatViewProps {
   chat: ChatSession | null;
@@ -26,6 +35,16 @@ interface ChatViewProps {
   onOpenPromptLibrary: () => void;
   onSelectPromptText: (text: string) => void;
   onToggleMobileMenu?: () => void;
+  onOpenArtifact?: (artifact: ArtifactData) => void;
+  currentTheme?: AITheme;
+  onChangeTheme?: (theme: AITheme) => void;
+  soundEnabled?: boolean;
+  onToggleSound?: () => void;
+  onOpenCommandPalette?: () => void;
+  onExportChat?: () => void;
+  onRenameChat?: (id: string, newTitle: string) => void;
+  onStopGenerating?: () => void;
+  onRegenerate?: () => void;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -38,13 +57,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onOpenPromptLibrary,
   onSelectPromptText,
   onToggleMobileMenu,
+  onOpenArtifact,
+  currentTheme = 'quantum',
+  onChangeTheme,
+  soundEnabled = true,
+  onToggleSound,
+  onOpenCommandPalette,
+  onExportChat,
+  onRenameChat,
+  onStopGenerating,
+  onRegenerate,
 }) => {
-  const [selectedModel, setSelectedModel] = useState<string>(chat?.model || 'gemini-3.8-flash');
+  const [selectedModel, setSelectedModel] = useState<string>(chat?.model || 'gemini-3.5-flash');
   const [showSystemInfo, setShowSystemInfo] = useState(false);
   const [show3DCompanion, setShow3DCompanion] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -60,7 +91,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (chat?.model) {
       setSelectedModel(chat.model);
     }
+    if (chat?.title) {
+      setTitleDraft(chat.title);
+    }
   }, [chat]);
+
+  const handleSaveTitle = () => {
+    if (chat && titleDraft.trim() && onRenameChat) {
+      onRenameChat(chat.id, titleDraft.trim());
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleCycleTheme = () => {
+    soundService.playClick();
+    if (!onChangeTheme) return;
+    const themes: AITheme[] = ['quantum', 'cyber', 'solar'];
+    const next = themes[(themes.indexOf(currentTheme) + 1) % themes.length];
+    onChangeTheme(next);
+  };
 
   const quickPrompts = [
     {
@@ -100,9 +149,50 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
           <div className="flex items-center gap-2 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-sm shadow-cyan-400 shrink-0" />
-            <h2 className="text-sm font-bold text-white tracking-wide truncate max-w-[130px] sm:max-w-xs md:max-w-md">
-              {chat ? chat.title : 'Nexus 3D Intelligence'}
-            </h2>
+            
+            {isEditingTitle && chat ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveTitle();
+                    if (e.key === 'Escape') setIsEditingTitle(false);
+                  }}
+                  autoFocus
+                  className="bg-slate-900 border border-cyan-500/50 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveTitle}
+                  className="p-1 rounded hover:bg-cyan-950 text-cyan-400"
+                  title="Save title"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 group min-w-0">
+                <h2
+                  className="text-sm font-bold text-white tracking-wide truncate max-w-[110px] sm:max-w-xs md:max-w-sm cursor-pointer hover:text-cyan-300 transition-colors"
+                  onClick={() => chat && setIsEditingTitle(true)}
+                  title="Click to rename"
+                >
+                  {chat ? chat.title : 'Nexus 3D Intelligence'}
+                </h2>
+                {chat && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTitle(true)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-cyan-300 transition-opacity"
+                    title="Rename session"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {workspace && (
@@ -113,7 +203,70 @@ export const ChatView: React.FC<ChatViewProps> = ({
           )}
         </div>
 
+        {/* Top Control Bar Action Pills */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Spotlight Command Palette Button */}
+          {onOpenCommandPalette && (
+            <button
+              onClick={() => {
+                soundService.playClick();
+                onOpenCommandPalette();
+              }}
+              className="flex items-center gap-1.5 text-xs px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-750 text-cyan-300 border border-cyan-500/30 transition-all shadow-sm active:scale-95"
+              title="Command Palette (Ctrl+K or ⌘K)"
+            >
+              <Search className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="hidden sm:inline font-mono text-[11px]">⌘K</span>
+            </button>
+          )}
+
+          {/* 3D Theme Switcher */}
+          {onChangeTheme && (
+            <button
+              onClick={handleCycleTheme}
+              className={`flex items-center gap-1.5 text-xs px-2 sm:px-2.5 py-1 rounded-lg border transition-all ${
+                currentTheme === 'quantum'
+                  ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40'
+                  : currentTheme === 'cyber'
+                  ? 'bg-purple-950/60 text-purple-300 border-purple-500/40'
+                  : 'bg-amber-950/60 text-amber-300 border-amber-500/40'
+              }`}
+              title="Switch 3D Visual Theme (Quantum / Cyber / Solar)"
+            >
+              <Palette className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden md:inline font-mono text-[11px] capitalize">{currentTheme}</span>
+            </button>
+          )}
+
+          {/* Sound FX Toggle */}
+          {onToggleSound && (
+            <button
+              onClick={onToggleSound}
+              className={`p-1.5 rounded-lg border transition-all ${
+                soundEnabled
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                  : 'bg-slate-800/60 text-slate-500 border-slate-700 hover:text-slate-300'
+              }`}
+              title={soundEnabled ? 'Sound FX Enabled (Click to Mute)' : 'Sound FX Muted (Click to Enable)'}
+            >
+              {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          {/* Export Chat Button */}
+          {chat && onExportChat && (
+            <button
+              onClick={() => {
+                soundService.playClick();
+                onExportChat();
+              }}
+              className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border border-slate-700/60 transition-colors"
+              title="Export Conversation to Markdown"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* 3D Companion Toggle */}
           <button
             onClick={() => setShow3DCompanion(!show3DCompanion)}
@@ -135,7 +288,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               title="View system prompt"
             >
               <Info className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden md:inline font-mono text-[11px]">System Role</span>
+              <span className="hidden md:inline font-mono text-[11px]">Role</span>
             </button>
           )}
         </div>
@@ -176,6 +329,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   isListening={isListening}
                   isSpeaking={isSpeaking}
                   isTyping={isTyping}
+                  theme={currentTheme}
                   className="w-full h-full"
                 />
               </div>
@@ -188,11 +342,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-[10px] sm:text-[11px] font-mono text-emerald-300">
                   <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Gemini 3.8 Neural</span>
+                  <span>Gemini 3.5 Neural</span>
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-purple-950/40 border border-purple-500/30 text-[10px] sm:text-[11px] font-mono text-purple-300">
                   <Activity className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Voice Input</span>
+                  <span>Voice Reactive</span>
                 </div>
               </div>
 
@@ -232,6 +386,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   key={msg.id}
                   message={msg}
                   onSpeakingChange={setIsSpeaking}
+                  onOpenArtifact={onOpenArtifact}
+                  onRegenerate={onRegenerate}
                 />
               ))}
 
@@ -246,6 +402,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     model: selectedModel,
                   }}
                   isStreaming={true}
+                  onSpeakingChange={setIsSpeaking}
+                  onOpenArtifact={onOpenArtifact}
                 />
               )}
               <div ref={messagesEndRef} />
@@ -262,7 +420,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
                   VOICE 3D CORE
                 </span>
-                <span className="text-slate-500">60 FPS</span>
+                <span className="text-slate-500 uppercase">{currentTheme}</span>
               </div>
               <p className="text-[10px] text-slate-400">
                 Interactive mouse & audio reactivity
@@ -275,6 +433,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 isListening={isListening}
                 isSpeaking={isSpeaking}
                 isTyping={isTyping}
+                theme={currentTheme}
                 className="w-full h-full"
               />
             </div>
@@ -300,6 +459,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         selectedModel={selectedModel}
         onSelectModel={setSelectedModel}
         onOpenPromptLibrary={onOpenPromptLibrary}
+        onStopGenerating={onStopGenerating}
         onListeningChange={setIsListening}
         onTypingChange={setIsTyping}
       />

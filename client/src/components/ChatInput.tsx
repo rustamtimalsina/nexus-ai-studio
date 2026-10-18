@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff, Square } from 'lucide-react';
 import { audioService } from '../services/audioService';
+import { soundService } from '../services/soundService';
 
 interface ChatInputProps {
   onSendMessage: (content: string, model: string) => void;
@@ -8,6 +9,7 @@ interface ChatInputProps {
   selectedModel: string;
   onSelectModel: (model: string) => void;
   onOpenPromptLibrary: () => void;
+  onStopGenerating?: () => void;
   onListeningChange?: (isListening: boolean) => void;
   onTypingChange?: (isTyping: boolean) => void;
 }
@@ -24,6 +26,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   selectedModel,
   onSelectModel,
   onOpenPromptLibrary,
+  onStopGenerating,
   onListeningChange,
   onTypingChange,
 }) => {
@@ -62,6 +65,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (isListening) {
       handleToggleMic();
     }
+    soundService.playSend();
     onSendMessage(input.trim(), selectedModel);
     setInput('');
     if (textareaRef.current) {
@@ -272,15 +276,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
 
-            {/* Submit Send Button */}
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 disabled:opacity-40 text-white transition-all shadow-md shadow-cyan-950/50 active:scale-95"
-              title="Send message"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+            {/* Submit / Stop Button */}
+            {isLoading ? (
+              <button
+                type="button"
+                onClick={onStopGenerating}
+                className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md shadow-rose-950/60 active:scale-95 animate-pulse"
+                title="Stop generation"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 disabled:opacity-40 text-white transition-all shadow-md shadow-cyan-950/50 active:scale-95"
+                title="Send message"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </form>
       </div>

@@ -224,7 +224,8 @@ export const api = {
     onUserMessage: (msg: Message) => void,
     onChunk: (chunk: string) => void,
     onComplete: (fullMessage: Message) => void,
-    onError: (err: any) => void
+    onError: (err: any) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
@@ -248,6 +249,7 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, model }),
+        signal,
       });
 
       const contentType = response.headers.get('content-type') || '';
@@ -317,6 +319,7 @@ export const api = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: allMsgs }),
+          signal,
         });
 
         if (res.ok && res.body) {
@@ -420,6 +423,7 @@ export const api = {
     // Stream out words with smooth cadence
     const words = reply.split(' ');
     for (let i = 0; i < words.length; i++) {
+      if (signal?.aborted) return;
       const chunk = (i === 0 ? '' : ' ') + words[i];
       onChunk(chunk);
       await new Promise((r) => setTimeout(r, 16));

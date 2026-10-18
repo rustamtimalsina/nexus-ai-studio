@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { WorkspaceModal } from './components/WorkspaceModal';
 import { PromptLibraryModal } from './components/PromptLibraryModal';
 import { SettingsModal } from './components/SettingsModal';
+import { ArtifactCanvas, ArtifactData } from './components/ArtifactCanvas';
+import { CommandPalette } from './components/CommandPalette';
+import { AITheme } from './components/AI3DCore';
+import { soundService } from './services/soundService';
 import { api } from './services/api';
 import { ChatSession, Message, Workspace, PromptTemplate, AppSettings } from './types';
 
@@ -15,20 +19,46 @@ export const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompts, setPrompts] = useState<PromptTemplate[]>([]);
   const [settings, setSettings] = useState<AppSettings>({
-    provider: 'mock',
+    provider: 'gemini',
     defaultModel: 'gemini-3.5-flash',
     temperature: 0.7,
     maxTokens: 2048,
   });
 
-  // Streaming state
+  // Next-Level UI States
+  const [currentTheme, setCurrentTheme] = useState<AITheme>(() => {
+    try {
+      return (localStorage.getItem('nexus_ai_theme') as AITheme) || 'quantum';
+    } catch {
+      return 'quantum';
+    }
+  });
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => soundService.isEnabled());
+  const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Streaming & Abort controller
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Modals state
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isPromptLibraryOpen, setIsPromptLibraryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Global Keyboard shortcuts: Ctrl+K or Cmd+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -76,6 +106,84 @@ export const App: React.FC = () => {
     loadMessages();
   }, [activeChatId]);
 
+  // Handle Theme switching
+  const handleThemeChange = (newTheme: AITheme) => {
+    setCurrentTheme(newTheme);
+    try {
+      localStorage.setItem('nexus_ai_theme', newTheme);
+    } catch {}
+  };
+
+  // Handle Sound toggle
+  const handleToggleSound = () => {
+    const next = soundService.toggle();
+    setSoundEnabled(next);
+  };
+
+  // Handle session rename
+  const handleRenameChat = (chatId: string, newTitle: string) => {
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, title: newTitle } : c))
+    );
+    try {
+      const stored = localStorage.getItem('nexus_chats');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((c: any) =>
+          c.id === chatId ? { ...c, title: newTitle } : c
+        );
+        localStorage.setItem('nexus_chats', JSON.stringify(updated));
+      }
+    } catch {}
+  };
+
+  // Handle Export Chat to Markdown file
+  const handleExportChat = () => {
+    const active = chats.find((c) => c.id === activeChatId);
+    if (!active || messages.length === 0) return;
+
+    let md = `# ${active.title}\n\n`;
+    md += `*Exported from NexusAI Studio on ${new Date().toLocaleString()}*\n\n`;
+    md += `**Model:** ${active.model || 'Gemini 3.5'}\n\n---\n\n`;
+
+    messages.forEach((m) => {
+      const sender = m.role === 'user' ? '👤 User' : '🤖 NexusAI';
+      md += `### ${sender} (${new Date(m.timestamp).toLocaleTimeString()})\n\n${m.content}\n\n---\n\n`;
+    });
+
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${active.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-export.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Stop active AI stream generation
+  const handleStopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    if (streamingContent.trim() && activeChatId) {
+      const partialMsg: Message = {
+        id: `msg-${Date.now()}`,
+        chatId: activeChatId,
+        role: 'assistant',
+        content: `${streamingContent} *(Generation stopped)*`,
+        timestamp: new Date().toISOString(),
+        model: settings.defaultModel || 'gemini-3.5-flash',
+      };
+      setMessages((prev) => [...prev, partialMsg]);
+    }
+    setStreamingContent('');
+    soundService.playClick();
+  };
+
   // Handle new chat creation
   const handleNewChat = async () => {
     try {
@@ -87,6 +195,7 @@ export const App: React.FC = () => {
       setChats((prev) => [newChat, ...prev]);
       setActiveChatId(newChat.id);
       setMessages([]);
+      soundService.playClick();
     } catch (err) {
       console.error('Failed to create new chat:', err);
     }
@@ -101,16 +210,16 @@ export const App: React.FC = () => {
       if (activeChatId === id) {
         setActiveChatId(remaining.length > 0 ? remaining[0].id : null);
       }
+      soundService.playClick();
     } catch (err) {
       console.error('Failed to delete chat:', err);
     }
   };
 
-  // Handle sending a message with live stream
+  // Handle sending a message with live stream & abort controller
   const handleSendMessage = async (content: string, model: string) => {
     let currentChatId = activeChatId;
 
-    // If no active chat, create one automatically
     if (!currentChatId) {
       const created = await api.createChat({
         title: content.slice(0, 30),
@@ -122,6 +231,12 @@ export const App: React.FC = () => {
       currentChatId = created.id;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setStreamingContent('');
 
@@ -131,7 +246,6 @@ export const App: React.FC = () => {
       model,
       (userMsg) => {
         setMessages((prev) => [...prev, userMsg]);
-        // Update chat title in sidebar if it was "New Chat"
         setChats((prev) =>
           prev.map((c) =>
             c.id === currentChatId && c.title === 'New Chat'
@@ -147,13 +261,28 @@ export const App: React.FC = () => {
         setMessages((prev) => [...prev, fullAssistantMsg]);
         setIsLoading(false);
         setStreamingContent('');
+        abortControllerRef.current = null;
+        soundService.playComplete();
       },
       (error) => {
-        console.error('Stream error:', error);
+        if (!controller.signal.aborted) {
+          console.error('Stream error:', error);
+        }
         setIsLoading(false);
         setStreamingContent('');
-      }
+        abortControllerRef.current = null;
+      },
+      controller.signal
     );
+  };
+
+  // Handle regenerate last assistant message
+  const handleRegenerate = () => {
+    if (messages.length === 0 || isLoading) return;
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+    if (lastUserMsg) {
+      handleSendMessage(lastUserMsg.content, activeChat?.model || settings.defaultModel || 'gemini-3.5-flash');
+    }
   };
 
   // Handle creating a workspace
@@ -162,6 +291,7 @@ export const App: React.FC = () => {
       const created = await api.createWorkspace(data);
       setWorkspaces((prev) => [...prev, created]);
       setActiveWorkspaceId(created.id);
+      soundService.playClick();
     } catch (err) {
       console.error('Failed to create workspace:', err);
     }
@@ -172,6 +302,7 @@ export const App: React.FC = () => {
     try {
       const created = await api.createPrompt(data);
       setPrompts((prev) => [...prev, created]);
+      soundService.playClick();
     } catch (err) {
       console.error('Failed to create prompt:', err);
     }
@@ -182,6 +313,7 @@ export const App: React.FC = () => {
     try {
       await api.deletePrompt(id);
       setPrompts((prev) => prev.filter((p) => p.id !== id));
+      soundService.playClick();
     } catch (err) {
       console.error('Failed to delete prompt:', err);
     }
@@ -192,13 +324,11 @@ export const App: React.FC = () => {
     try {
       const updated = await api.updateSettings(updates);
       setSettings(updated);
+      soundService.playClick();
     } catch (err) {
       console.error('Failed to save settings:', err);
     }
   };
-
-  // Mobile sidebar state
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const activeChat = chats.find((c) => c.id === activeChatId) || null;
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || null;
@@ -243,6 +373,57 @@ export const App: React.FC = () => {
           handleSendMessage(promptText, activeChat?.model || settings.defaultModel || 'gemini-3.5-flash');
         }}
         onToggleMobileMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
+        onOpenArtifact={setActiveArtifact}
+        currentTheme={currentTheme}
+        onChangeTheme={handleThemeChange}
+        soundEnabled={soundEnabled}
+        onToggleSound={handleToggleSound}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        onExportChat={handleExportChat}
+        onRenameChat={handleRenameChat}
+        onStopGenerating={handleStopGenerating}
+        onRegenerate={handleRegenerate}
+      />
+
+      {/* Live Interactive Artifact Canvas Sandbox */}
+      <ArtifactCanvas
+        artifact={activeArtifact}
+        onClose={() => setActiveArtifact(null)}
+      />
+
+      {/* Spotlight Command Palette (Ctrl+K / Cmd+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        chats={chats}
+        onSelectChat={(id) => {
+          setActiveChatId(id);
+          setIsCommandPaletteOpen(false);
+        }}
+        onNewChat={handleNewChat}
+        workspaces={workspaces}
+        onSelectWorkspace={(id) => {
+          setActiveWorkspaceId(id);
+          setIsCommandPaletteOpen(false);
+        }}
+        prompts={prompts}
+        onSelectPrompt={(text) => {
+          handleSendMessage(text, activeChat?.model || settings.defaultModel || 'gemini-3.5-flash');
+          setIsCommandPaletteOpen(false);
+        }}
+        onOpenSettings={() => {
+          setIsSettingsOpen(true);
+          setIsCommandPaletteOpen(false);
+        }}
+        onOpenPromptLibrary={() => {
+          setIsPromptLibraryOpen(true);
+          setIsCommandPaletteOpen(false);
+        }}
+        onExportChat={handleExportChat}
+        currentTheme={currentTheme}
+        onChangeTheme={handleThemeChange}
+        soundEnabled={soundEnabled}
+        onToggleSound={handleToggleSound}
       />
 
       {/* Modals */}
@@ -257,7 +438,7 @@ export const App: React.FC = () => {
         onClose={() => setIsPromptLibraryOpen(false)}
         prompts={prompts}
         onSelectPrompt={(text) => {
-          handleSendMessage(text, activeChat?.model || settings.defaultModel || 'gemini-3.8-flash');
+          handleSendMessage(text, activeChat?.model || settings.defaultModel || 'gemini-3.5-flash');
         }}
         onCreatePrompt={handleCreatePrompt}
         onDeletePrompt={handleDeletePrompt}
@@ -272,4 +453,5 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
 export default App;
