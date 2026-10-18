@@ -1,10 +1,9 @@
 /**
  * Universal Resilient Audio Service:
- * 1. Speech-to-Text (STT) compatible with Desktop Chrome, Edge, and iOS/Android Mobile Safari/Chrome.
- * 2. Automatic platform adaptation:
- *    - iOS Safari fails if continuous=true; we adapt continuous mode per platform.
- *    - Handles pause timeouts seamlessly without dropping sessions.
+ * 1. Speech-to-Text (STT) compatible with Desktop Chrome, Edge, Safari, and Mobile.
+ * 2. Brave Browser detection and clear resolution for Brave's privacy shield.
  * 3. Text-to-Speech (TTS) with Chromium audio keep-alive and natural voice selection.
+ * 4. Fallback HTML5 MediaRecorder audio capture.
  */
 
 class AudioService {
@@ -14,13 +13,15 @@ class AudioService {
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private accumulatedText = '';
   private restartTimer: any = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedAudioChunks: Blob[] = [];
+  private micStream: MediaStream | null = null;
 
   // Platform detection
   private isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
-  private isMobile =
+  public isBrave =
     typeof navigator !== 'undefined' &&
-    (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '') ||
-      window.innerWidth < 768);
+    Boolean((navigator as any).brave || ((window as any).chrome && !(window as any).google && !/Edg/.test(navigator.userAgent)));
 
   // Check if browser has speech recognition
   isSpeechSupported(): boolean {
@@ -60,7 +61,7 @@ class AudioService {
         const recognition = new SpeechRecognition();
         this.recognition = recognition;
 
-        // In iOS WebKit, setting continuous: true silently breaks speech recognition.
+        // In iOS WebKit, continuous: true silently breaks speech recognition.
         // On Desktop Chrome, continuous: true allows long streaming dictation.
         recognition.continuous = !this.isIOS;
         recognition.interimResults = true;
@@ -117,20 +118,37 @@ class AudioService {
 
           if (event.error === 'audio-capture') {
             this.isListening = false;
-            onError('Microphone not detected or busy with another app.');
+            onError('Microphone not detected or busy with another application.');
             onEnd();
             return;
           }
 
+          // Brave Browser blocks Google Speech servers by default for privacy
           if (event.error === 'network') {
-            onError('Speech recognition network warning. Transcription will resume once connection stabilizes.');
+            this.isListening = false;
+            const isBraveUser =
+              Boolean((navigator as any).brave) ||
+              /Brave/i.test(navigator.userAgent || '') ||
+              window.location.hostname.includes('vercel.app');
+
+            if (isBraveUser) {
+              onError(
+                '🦁 Brave Browser blocks Google Voice Recognition by default. In Brave: go to brave://settings/privacy, turn ON "Use Google services for voice recognition", then refresh (or open in Google Chrome / Edge).'
+              );
+            } else {
+              onError(
+                'Speech recognition service is blocked by your browser network or firewall. Please try in Google Chrome or Microsoft Edge.'
+              );
+            }
+            onEnd();
+            return;
           }
         };
 
         recognition.onend = () => {
           console.log('[Voice STT] Recognition session ended');
 
-          // If session produced final/interim text, save it into accumulated history
+          // If session produced text, save it into accumulated history
           if (latestSessionTranscript) {
             this.accumulatedText = [this.accumulatedText, latestSessionTranscript]
               .filter(Boolean)
@@ -178,6 +196,55 @@ class AudioService {
       } catch {}
       this.recognition = null;
     }
+  }
+
+  // Native MediaRecorder recording
+  async startRecordingAudio(): Promise<boolean> {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) return false;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      this.micStream = stream;
+      this.mediaRecorder = new MediaRecorder(stream);
+      this.recordedAudioChunks = [];
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          this.recordedAudioChunks.push(event.data);
+        }
+      };
+
+      this.mediaRecorder.start(250);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  stopRecordingAudio(): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      if (!this.mediaRecorder) {
+        resolve(null);
+        return;
+      }
+
+      this.mediaRecorder.onstop = () => {
+        const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
+        const blob = new Blob(this.recordedAudioChunks, { type: mimeType });
+        this.recordedAudioChunks = [];
+        if (this.micStream) {
+          this.micStream.getTracks().forEach((track) => track.stop());
+          this.micStream = null;
+        }
+        this.mediaRecorder = null;
+        resolve(blob);
+      };
+
+      try {
+        this.mediaRecorder.stop();
+      } catch {
+        resolve(null);
+      }
+    });
   }
 
   // Text-To-Speech with Chromium audio keep-alive

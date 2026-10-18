@@ -120,12 +120,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <div className="max-w-3xl mx-auto">
         {/* Error Notification */}
         {micError && (
-          <div className="mb-2 px-3 py-2 rounded-lg bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center justify-between shadow-lg">
-            <span className="truncate pr-2">🎙️ {micError}</span>
+          <div className="mb-2.5 p-3 rounded-xl bg-amber-950/90 border border-amber-500/50 text-amber-200 text-xs flex items-start justify-between shadow-xl animate-in fade-in">
+            <div className="flex items-start gap-2.5 min-w-0 pr-2">
+              <span className="text-base shrink-0">🎙️</span>
+              <div className="leading-relaxed">
+                <p className="text-amber-100 font-medium">{micError}</p>
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => setMicError(null)}
-              className="text-red-300 hover:text-white font-bold shrink-0 px-1"
+              className="text-amber-400 hover:text-white font-bold shrink-0 px-1.5 py-0.5 rounded hover:bg-amber-900/40 text-sm"
+              title="Dismiss notice"
             >
               ✕
             </button>
