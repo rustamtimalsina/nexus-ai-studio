@@ -122,9 +122,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         {micError && (
           <div className="mb-2.5 p-3 rounded-xl bg-amber-950/90 border border-amber-500/50 text-amber-200 text-xs flex items-start justify-between shadow-xl animate-in fade-in">
             <div className="flex items-start gap-2.5 min-w-0 pr-2">
-              <span className="text-base shrink-0">🎙️</span>
+              <span className="text-base shrink-0">🦁</span>
               <div className="leading-relaxed">
-                <p className="text-amber-100 font-medium">{micError}</p>
+                <p className="text-amber-100 font-semibold mb-0.5">Brave Voice Privacy Notice</p>
+                <p className="text-amber-200/90 text-[11px] leading-relaxed">{micError}</p>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('brave://settings/privacy');
+                    }}
+                    className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-mono text-[11px] transition-colors flex items-center gap-1 active:scale-95"
+                    title="Copy setting URL to clipboard"
+                  >
+                    <span>📋 Copy brave://settings/privacy</span>
+                  </button>
+                  <span className="text-[11px] text-amber-300/70 font-sans">
+                    or open this link in Google Chrome / Edge
+                  </span>
+                </div>
               </div>
             </div>
             <button
