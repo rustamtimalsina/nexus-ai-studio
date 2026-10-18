@@ -16,7 +16,7 @@ export const App: React.FC = () => {
   const [prompts, setPrompts] = useState<PromptTemplate[]>([]);
   const [settings, setSettings] = useState<AppSettings>({
     provider: 'mock',
-    defaultModel: 'gemini-3.8-flash',
+    defaultModel: 'gemini-3.5-flash',
     temperature: 0.7,
     maxTokens: 2048,
   });
@@ -82,7 +82,7 @@ export const App: React.FC = () => {
       const newChat = await api.createChat({
         title: 'New Chat',
         workspaceId: activeWorkspaceId,
-        model: settings.defaultModel || 'gemini-3.8-flash',
+        model: settings.defaultModel || 'gemini-3.5-flash',
       });
       setChats((prev) => [newChat, ...prev]);
       setActiveChatId(newChat.id);
@@ -240,7 +240,7 @@ export const App: React.FC = () => {
         onSendMessage={handleSendMessage}
         onOpenPromptLibrary={() => setIsPromptLibraryOpen(true)}
         onSelectPromptText={(promptText) => {
-          handleSendMessage(promptText, activeChat?.model || settings.defaultModel || 'gemini-3.8-flash');
+          handleSendMessage(promptText, activeChat?.model || settings.defaultModel || 'gemini-3.5-flash');
         }}
         onToggleMobileMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
       />

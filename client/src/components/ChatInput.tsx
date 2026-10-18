@@ -13,10 +13,9 @@ interface ChatInputProps {
 }
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Fast & Smart' },
-  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', badge: 'Deep Reasoning' },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', badge: 'High Throughput' },
-  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', badge: 'Auto-Updated' },
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', badge: 'Active Neural' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Lite', badge: 'Ultra Fast' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Deep Reasoning' },
 ];
 
 export const ChatInput: React.FC<ChatInputProps> = ({

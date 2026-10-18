@@ -30,31 +30,42 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const targetModel = 'gemini-3.8-flash';
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    const candidateModels = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+    let geminiRes: any = null;
+    let usedModel = 'gemini-3.5-flash';
 
     const systemInstruction =
-      'You are NexusAI Studio, an elite, articulate, and intelligent AI companion created and engineered by Rustam Timalsina. Always be helpful, witty, accurate, and structured. If asked who created or made you, proudly confirm that Rustam Timalsina built you using React, TypeScript, Three.js, and Gemini.';
+      'You are NexusAI Studio, an interactive, smart, and friendly AI assistant created and engineered by Rustam Timalsina. Always answer naturally, intelligently, and helpfully. If asked who created or made you, proudly confirm that Rustam Timalsina built you using React, TypeScript, Three.js, and Google Gemini.';
 
-    const geminiRes = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: systemInstruction }],
-        },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: content }],
-          },
-        ],
-      }),
-    });
+    for (const modelName of candidateModels) {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
+      try {
+        const candidate = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: {
+              parts: [{ text: systemInstruction }],
+            },
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: content }],
+              },
+            ],
+          }),
+        });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      return res.status(geminiRes.status).json({ error: errText });
+        if (candidate.ok) {
+          geminiRes = candidate;
+          usedModel = modelName;
+          break;
+        }
+      } catch {}
+    }
+
+    if (!geminiRes || !geminiRes.ok) {
+      return res.status(502).json({ error: 'All Gemini models busy' });
     }
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -101,7 +112,7 @@ export default async function handler(req: any, res: any) {
         done: true,
         fullText: accumulatedText,
         tokens,
-        model: 'gemini-3.8-flash',
+        model: usedModel,
       })}\n\n`
     );
     res.end();
