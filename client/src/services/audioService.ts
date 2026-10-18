@@ -1,8 +1,8 @@
 /**
- * Audio Service providing:
- * 1. Microphone capture & Web Audio API Analyser for real-time frequency reactivity
- * 2. Speech-to-Text (Voice Recognition)
- * 3. Text-to-Speech (Speech Synthesis)
+ * Resilient Audio Service:
+ * 1. Speech-to-Text (Voice Recognition) with fresh instance recreation per session
+ * 2. Web Audio API frequency analyzer for 3D visualizer
+ * 3. Text-to-Speech with Chromium audio keep-alive
  */
 
 class AudioService {
@@ -13,32 +13,23 @@ class AudioService {
   private isListening = false;
   private isSpeaking = false;
   private freqData: Uint8Array | null = null;
-
-  constructor() {
-    // Setup Speech Recognition if supported
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = false;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
-    }
-  }
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
 
   // Initialize microphone listener for audio-reactive 3D visualizer
   async initMicVisualizer(): Promise<boolean> {
     try {
       if (!this.audioCtx) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        this.audioCtx = new AudioContextClass();
+        if (AudioContextClass) {
+          this.audioCtx = new AudioContextClass();
+        }
       }
 
-      if (this.audioCtx.state === 'suspended') {
+      if (this.audioCtx && this.audioCtx.state === 'suspended') {
         await this.audioCtx.resume();
       }
 
-      if (!this.micStream) {
+      if (this.audioCtx && !this.micStream && navigator.mediaDevices?.getUserMedia) {
         this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         const source = this.audioCtx.createMediaStreamSource(this.micStream);
         this.analyser = this.audioCtx.createAnalyser();
@@ -49,7 +40,7 @@ class AudioService {
       }
       return true;
     } catch (err) {
-      console.warn('Microphone access denied or unavailable for visualizer:', err);
+      console.warn('Microphone stream access unavailable for visualizer:', err);
       return false;
     }
   }
@@ -57,14 +48,17 @@ class AudioService {
   // Get normalized audio energy level (0.0 to 1.0)
   getAudioLevel(): number {
     if (!this.analyser || !this.freqData) return 0;
-    (this.analyser.getByteFrequencyData as any)(this.freqData);
-
-    let sum = 0;
-    for (let i = 0; i < this.freqData.length; i++) {
-      sum += this.freqData[i];
+    try {
+      (this.analyser.getByteFrequencyData as any)(this.freqData);
+      let sum = 0;
+      for (let i = 0; i < this.freqData.length; i++) {
+        sum += this.freqData[i];
+      }
+      const avg = sum / this.freqData.length;
+      return Math.min(avg / 128, 1.0);
+    } catch {
+      return 0;
     }
-    const avg = sum / this.freqData.length;
-    return Math.min(avg / 128, 1.0); // Normalized
   }
 
   // Start voice recognition
@@ -73,19 +67,29 @@ class AudioService {
     onError: (err: string) => void,
     onEnd: () => void
   ): boolean {
-    if (!this.recognition) {
-      onError('Speech Recognition is not supported in this browser. Try Chrome, Edge, or Safari.');
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      onError('Speech Recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
       return false;
     }
 
     if (this.isListening) {
       this.stopListening();
-      return false;
     }
 
     try {
-      this.initMicVisualizer();
+      // Create fresh recognition instance every time to avoid InvalidStateError
+      this.recognition = new SpeechRecognition();
+      this.recognition.continuous = false;
+      this.recognition.interimResults = true;
+      this.recognition.lang = 'en-US';
+
       this.isListening = true;
+
+      // Try initializing visualizer in background (non-blocking)
+      this.initMicVisualizer().catch(() => {});
 
       this.recognition.onresult = (event: any) => {
         let interim = '';
@@ -103,9 +107,14 @@ class AudioService {
       };
 
       this.recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        onError(event.error);
+        console.warn('Speech recognition status:', event.error);
+        if (event.error === 'not-allowed') {
+          onError('Microphone permission denied. Please allow microphone access in your browser settings.');
+        } else if (event.error !== 'no-speech') {
+          onError(`Speech recognition notice: ${event.error}`);
+        }
         this.isListening = false;
+        onEnd();
       };
 
       this.recognition.onend = () => {
@@ -117,49 +126,64 @@ class AudioService {
       return true;
     } catch (err: any) {
       console.error('Failed to start speech recognition:', err);
-      onError(err?.message || 'Speech recognition failed to start');
+      onError(err?.message || 'Speech recognition initialization failed.');
       this.isListening = false;
+      onEnd();
       return false;
     }
   }
 
   // Stop voice recognition
   stopListening(): void {
-    if (this.recognition && this.isListening) {
+    if (this.recognition) {
       try {
         this.recognition.stop();
       } catch {}
-      this.isListening = false;
+      this.recognition = null;
     }
+    this.isListening = false;
   }
 
-  // Text-To-Speech
+  // Text-To-Speech with Chromium keep-alive
   speak(text: string, onStart?: () => void, onEnd?: () => void): void {
     if (!('speechSynthesis' in window)) return;
 
     this.stopSpeaking();
 
-    // Strip code blocks and markdown syntax from spoken text
+    // Clean text: strip code blocks, math symbols, markdown
     const cleanText = text
       .replace(/```[\s\S]*?```/g, 'Code block omitted.')
+      .replace(/\$\$[\s\S]*?\$\$/g, 'Formula calculated.')
       .replace(/`([^`]+)`/g, '$1')
       .replace(/[*#_~]/g, '')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .slice(0, 500); // speak first 500 chars for concise voice response
+      .slice(0, 600);
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
+    this.currentUtterance = utterance;
     utterance.rate = 1.05;
     utterance.pitch = 1.0;
 
     // Pick a natural voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(
-      (v) =>
-        (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Daniel')) &&
-        v.lang.startsWith('en')
-    );
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+    const setVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const preferredVoice = voices.find(
+        (v) =>
+          (v.name.includes('Natural') ||
+            v.name.includes('Google') ||
+            v.name.includes('Samantha') ||
+            v.name.includes('Daniel') ||
+            v.name.includes('Jenny')) &&
+          v.lang.startsWith('en')
+      );
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+    };
+
+    setVoice();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = setVoice;
     }
 
     utterance.onstart = () => {
@@ -169,14 +193,20 @@ class AudioService {
 
     utterance.onend = () => {
       this.isSpeaking = false;
+      this.currentUtterance = null;
       if (onEnd) onEnd();
     };
 
     utterance.onerror = () => {
       this.isSpeaking = false;
+      this.currentUtterance = null;
       if (onEnd) onEnd();
     };
 
+    // Chromium fix: resume before speak
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
     window.speechSynthesis.speak(utterance);
   }
 
@@ -184,6 +214,7 @@ class AudioService {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       this.isSpeaking = false;
+      this.currentUtterance = null;
     }
   }
 

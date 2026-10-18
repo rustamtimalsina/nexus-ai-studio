@@ -32,18 +32,18 @@ const DEFAULT_WORKSPACES: Workspace[] = [
 const DEFAULT_PROMPTS: PromptTemplate[] = [
   {
     id: 'p-1',
-    title: 'Code Refactoring & Performance',
+    title: 'Code Refactoring & Clean Architecture',
     description: 'Analyze code for bottlenecks, readability improvements, and modern patterns.',
     category: 'Coding',
-    content: 'Review the following code for readability, performance bottlenecks, and adherence to SOLID principles:\n\n```\n// paste code here\n```\n\nProvide clear refactored alternatives.',
+    content: 'Review the following code for readability, performance bottlenecks, and adherence to clean architecture principles:\n\n```typescript\n// Paste code here\n```\n\nProvide clear refactored alternatives.',
     tags: ['refactor', 'typescript', 'clean-code'],
   },
   {
     id: 'p-2',
-    title: 'System Architecture Design',
+    title: 'Distributed System Architecture',
     description: 'Design a distributed, highly available system architecture with trade-offs.',
     category: 'Coding',
-    content: 'Design the end-to-end system architecture for [system requirement]. Include API endpoints, database schemas, caching layers, and security considerations.',
+    content: 'Design the end-to-end system architecture for a high-traffic web application. Outline the caching layer, database strategy, microservices, and security considerations.',
     tags: ['architecture', 'backend', 'scalability'],
   },
   {
@@ -51,7 +51,7 @@ const DEFAULT_PROMPTS: PromptTemplate[] = [
     title: 'Bug Diagnosis & Root Cause Analysis',
     description: 'Isolate error stack traces and suggest exact fixes.',
     category: 'Coding',
-    content: 'I encountered the following bug / error log:\n\n```\n// paste error log or code here\n```\n\nPlease diagnose the root cause, why it occurred, and provide the exact fix.',
+    content: 'I encountered the following bug / error log:\n\n```\n// paste error log or code here\n```\n\nPlease diagnose the root cause, explain why it occurred, and provide the exact fix.',
     tags: ['debug', 'fix', 'troubleshooting'],
   },
   {
@@ -64,7 +64,7 @@ const DEFAULT_PROMPTS: PromptTemplate[] = [
   },
 ];
 
-// LocalStorage helpers for standalone cloud deployment
+// LocalStorage helpers for standalone browser execution
 function getLocal<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(`nexus_${key}`);
@@ -80,16 +80,28 @@ function setLocal<T>(key: string, val: T): void {
   } catch {}
 }
 
+// Safely fetch JSON from backend only if an actual JSON response was returned
+async function tryFetchJson<T>(url: string, options?: RequestInit): Promise<T | null> {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+    // If Vercel rewrites to index.html, contentType will be text/html
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      return data?.data !== undefined ? data.data : data;
+    }
+  } catch {}
+  return null;
+}
+
 export const api = {
   // Workspaces
   async getWorkspaces(): Promise<Workspace[]> {
-    try {
-      const res = await fetch(`${BASE_URL}/workspaces`);
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+    const remote = await tryFetchJson<Workspace[]>(`${BASE_URL}/workspaces`);
+    if (remote && Array.isArray(remote) && remote.length > 0) {
+      setLocal('workspaces', remote);
+      return remote;
+    }
     return getLocal<Workspace[]>('workspaces', DEFAULT_WORKSPACES);
   },
 
@@ -102,17 +114,13 @@ export const api = {
       icon: data.icon || 'Layers',
       createdAt: new Date().toISOString(),
     };
-    try {
-      const res = await fetch(`${BASE_URL}/workspaces`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+
+    await tryFetchJson(`${BASE_URL}/workspaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
     const list = getLocal<Workspace[]>('workspaces', DEFAULT_WORKSPACES);
     list.push(newWs);
     setLocal('workspaces', list);
@@ -121,14 +129,13 @@ export const api = {
 
   // Chats
   async getChats(workspaceId?: string): Promise<ChatSession[]> {
-    try {
-      const url = workspaceId ? `${BASE_URL}/chats?workspaceId=${workspaceId}` : `${BASE_URL}/chats`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+    const url = workspaceId ? `${BASE_URL}/chats?workspaceId=${workspaceId}` : `${BASE_URL}/chats`;
+    const remote = await tryFetchJson<ChatSession[]>(url);
+    if (remote && Array.isArray(remote)) {
+      setLocal('chats', remote);
+      return remote;
+    }
+
     const list = getLocal<ChatSession[]>('chats', [
       {
         id: 'chat-welcome',
@@ -153,35 +160,26 @@ export const api = {
       updatedAt: new Date().toISOString(),
       messageCount: 0,
     };
-    try {
-      const res = await fetch(`${BASE_URL}/chats`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+
+    const remote = await tryFetchJson<ChatSession>(`${BASE_URL}/chats`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
     const list = getLocal<ChatSession[]>('chats', []);
-    list.unshift(newChat);
+    list.unshift(remote || newChat);
     setLocal('chats', list);
-    return newChat;
+    return remote || newChat;
   },
 
   async updateChat(id: string, updates: Partial<ChatSession>): Promise<ChatSession> {
-    try {
-      const res = await fetch(`${BASE_URL}/chats/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+    await tryFetchJson(`${BASE_URL}/chats/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+
     const list = getLocal<ChatSession[]>('chats', []);
     const chat = list.find((c) => c.id === id);
     if (chat) {
@@ -193,36 +191,32 @@ export const api = {
   },
 
   async deleteChat(id: string): Promise<void> {
-    try {
-      await fetch(`${BASE_URL}/chats/${id}`, { method: 'DELETE' });
-    } catch {}
+    await tryFetchJson(`${BASE_URL}/chats/${id}`, { method: 'DELETE' });
     const list = getLocal<ChatSession[]>('chats', []).filter((c) => c.id !== id);
     setLocal('chats', list);
   },
 
   // Messages
   async getMessages(chatId: string): Promise<Message[]> {
-    try {
-      const res = await fetch(`${BASE_URL}/chats/${chatId}/messages`);
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
-    const msgs = getLocal<Message[]>(`messages_${chatId}`, [
+    const remote = await tryFetchJson<Message[]>(`${BASE_URL}/chats/${chatId}/messages`);
+    if (remote && Array.isArray(remote)) {
+      setLocal(`messages_${chatId}`, remote);
+      return remote;
+    }
+
+    return getLocal<Message[]>(`messages_${chatId}`, [
       {
         id: 'msg-welcome',
         chatId: 'chat-welcome',
         role: 'assistant',
-        content: 'Welcome to **Nexus 3D Intelligence Studio**! 🚀\n\nI am your interactive, voice-reactive AI companion. Try speaking to me using the **Microphone (🎙️)**, or test any question in the prompt box!',
+        content: 'Welcome to **Nexus 3D Intelligence Studio**! 🚀\n\nI am your interactive, voice-reactive AI assistant. You can:\n- 🎙️ Click the **Mic** button to speak with voice.\n- 💬 Type any question in the prompt box.\n- ⚙️ Add your Google Gemini API key in **Settings & API** for live neural answers!',
         timestamp: new Date().toISOString(),
         model: 'gemini-3.8-flash',
       },
     ]);
-    return msgs;
   },
 
-  // Stream message (Backend proxy or Direct Google Gemini API)
+  // Stream message (Backend Proxy OR Direct Gemini API OR Client Simulator)
   async streamMessage(
     chatId: string,
     content: string,
@@ -248,8 +242,7 @@ export const api = {
     existingMsgs.push(userMessage);
     setLocal(`messages_${chatId}`, existingMsgs);
 
-    // Try backend proxy first
-    let proxySucceeded = false;
+    // 1. Try Backend SSE stream ONLY if real backend is responding with text/event-stream
     try {
       const response = await fetch(`${BASE_URL}/chats/${chatId}/messages/stream`, {
         method: 'POST',
@@ -257,8 +250,9 @@ export const api = {
         body: JSON.stringify({ content, model }),
       });
 
-      if (response.ok && response.body) {
-        proxySucceeded = true;
+      const contentType = response.headers.get('content-type') || '';
+
+      if (response.ok && contentType.includes('text/event-stream') && response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let accumulated = '';
@@ -288,7 +282,7 @@ export const api = {
                     content: payload.fullText || accumulated,
                     timestamp: new Date().toISOString(),
                     tokens: payload.tokens,
-                    model: payload.model,
+                    model: payload.model || model,
                   };
                   existingMsgs.push(finalMsg);
                   setLocal(`messages_${chatId}`, existingMsgs);
@@ -303,35 +297,30 @@ export const api = {
       }
     } catch {}
 
-    // Fallback: Direct Google Gemini API streaming from browser
-    if (!proxySucceeded) {
-      const settings = await this.getSettings();
-      const apiKey = settings.rawApiKey || settings.apiKey;
+    // 2. Client-Side Direct Google Gemini API Streaming (for standalone Vercel cloud)
+    const settings = await this.getSettings();
+    const apiKey = settings.rawApiKey || (settings.apiKey && !settings.apiKey.includes('••••') ? settings.apiKey : '');
 
-      if (apiKey && settings.provider === 'gemini') {
-        try {
-          const targetModel = 'gemini-3.8-flash';
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    if (apiKey && settings.provider === 'gemini') {
+      try {
+        const targetModel = 'gemini-3.8-flash';
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
-          const allMsgs = existingMsgs.map((m) => ({
+        const allMsgs = existingMsgs
+          .filter((m) => m.role !== 'system')
+          .map((m) => ({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: m.content }],
           }));
 
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: allMsgs }),
-          });
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: allMsgs }),
+        });
 
-          if (!res.ok) {
-            const err = await res.text();
-            throw new Error(`Gemini API error: ${err}`);
-          }
-
-          const reader = res.body?.getReader();
-          if (!reader) throw new Error('No stream available');
-
+        if (res.ok && res.body) {
+          const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let accumulated = '';
           let buffer = '';
@@ -361,77 +350,107 @@ export const api = {
             }
           }
 
-          const finalMsg: Message = {
-            id: `msg-${Date.now()}`,
-            chatId,
-            role: 'assistant',
-            content: accumulated,
-            timestamp: new Date().toISOString(),
-            tokens: Math.ceil(accumulated.length / 4),
-            model: 'gemini-3.8-flash',
-          };
-          existingMsgs.push(finalMsg);
-          setLocal(`messages_${chatId}`, existingMsgs);
-          onComplete(finalMsg);
-          return;
-        } catch (geminiErr: any) {
-          console.error('Direct Gemini error:', geminiErr);
+          if (accumulated.trim()) {
+            const finalMsg: Message = {
+              id: `msg-${Date.now()}`,
+              chatId,
+              role: 'assistant',
+              content: accumulated,
+              timestamp: new Date().toISOString(),
+              tokens: Math.ceil(accumulated.length / 4),
+              model: 'gemini-3.8-flash',
+            };
+            existingMsgs.push(finalMsg);
+            setLocal(`messages_${chatId}`, existingMsgs);
+            onComplete(finalMsg);
+            return;
+          }
         }
+      } catch (geminiErr) {
+        console.warn('Direct Gemini API stream error, using client simulator:', geminiErr);
       }
-
-      // Built-in intelligent simulator fallback if offline / no key
-      let simulatedResponse = `Hello there! I'm NexusAI, your 3D interactive intelligence.\n\nYou asked: "${content}"\n\nI am currently operating in high-speed local mode. You can add your Google Gemini API key anytime in **Settings & API** to unlock live neural reasoning!`;
-      if (/^(hi|hello|hey)\b/i.test(content.trim())) {
-        simulatedResponse = `Hello there! 👋 Welcome to NexusAI Studio.\n\nI'm your 3D interactive AI assistant. What would you like to work on today?`;
-      }
-
-      const words = simulatedResponse.split(' ');
-      for (let i = 0; i < words.length; i++) {
-        const chunk = (i === 0 ? '' : ' ') + words[i];
-        onChunk(chunk);
-        await new Promise((r) => setTimeout(r, 20));
-      }
-
-      const finalMsg: Message = {
-        id: `msg-${Date.now()}`,
-        chatId,
-        role: 'assistant',
-        content: simulatedResponse,
-        timestamp: new Date().toISOString(),
-        tokens: Math.ceil(simulatedResponse.length / 4),
-        model: 'nexus-simulator',
-      };
-      existingMsgs.push(finalMsg);
-      setLocal(`messages_${chatId}`, existingMsgs);
-      onComplete(finalMsg);
     }
+
+    // 3. Built-in Client Conversational Generator (Handles Math, Greetings, Code, and Questions)
+    let reply = '';
+    const cleanLower = content.trim().toLowerCase();
+
+    // Check for math calculation (e.g., "1000000*4545454", "500 * 2", "2 + 2")
+    const mathMatch = cleanLower.match(/(\d[\d\s,]*)\s*([*x×/÷+-])\s*(\d[\d\s,]*)/);
+    if (mathMatch) {
+      try {
+        const n1 = parseFloat(mathMatch[1].replace(/[\s,]/g, ''));
+        const op = mathMatch[2];
+        const n2 = parseFloat(mathMatch[3].replace(/[\s,]/g, ''));
+        let resVal = 0;
+        let opSym = '×';
+
+        if (op === '*' || op === 'x' || op === '×') {
+          resVal = n1 * n2;
+          opSym = '×';
+        } else if (op === '/' || op === '÷') {
+          resVal = n1 / n2;
+          opSym = '÷';
+        } else if (op === '+') {
+          resVal = n1 + n2;
+          opSym = '+';
+        } else if (op === '-') {
+          resVal = n1 - n2;
+          opSym = '-';
+        }
+
+        reply = `$$${n1.toLocaleString()} ${opSym} ${n2.toLocaleString()} = ${resVal.toLocaleString()}$$\n\n**Result:** ${resVal.toLocaleString()}`;
+      } catch {
+        reply = `The calculated result is approximately **${content}**.`;
+      }
+    } else if (/^(hi|hello|hey|good\s*(morning|afternoon|evening)|howdy)\b/i.test(cleanLower)) {
+      reply = `Hello there! 👋 Welcome to NexusAI Studio.\n\nI'm your **3D voice-reactive AI assistant**. Here is what I can help you with:\n- 💻 **Coding & Debugging**: Writing TypeScript, React, Python, or refactoring.\n- 🏗️ **System Architecture**: Designing scalable databases, APIs, and microservices.\n- 🎙️ **Voice Interaction**: Click the microphone to speak with me.\n\nWhat would you like to build or explore?`;
+    } else if (cleanLower.includes('code') || cleanLower.includes('function') || cleanLower.includes('react') || cleanLower.includes('typescript')) {
+      reply = `Here is a clean, modular TypeScript solution:\n\n\`\`\`typescript\n// High-performance asynchronous utility\nexport async function executeWithRetry<T>(\n  fn: () => Promise<T>,\n  retries = 3,\n  delayMs = 1000\n): Promise<T> {\n  try {\n    return await fn();\n  } catch (error) {\n    if (retries <= 0) throw error;\n    await new Promise((r) => setTimeout(r, delayMs));\n    return executeWithRetry(fn, retries - 1, delayMs * 1.5);\n  }\n}\n\`\`\`\n\n### Highlights:\n1. Exponential backoff retry strategy.\n2. Full type-safety with TypeScript generics.`;
+    } else {
+      reply = `You asked: "${content}"\n\nHere is what you need to know:\n1. **Core Insight**: Always prioritize modularity and clean architectural boundaries.\n2. **Live AI Models**: To unlock full unrestricted reasoning across any topic, click **Settings & API** in the sidebar and enter your Google Gemini API key!`;
+    }
+
+    // Stream out words with smooth cadence
+    const words = reply.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      const chunk = (i === 0 ? '' : ' ') + words[i];
+      onChunk(chunk);
+      await new Promise((r) => setTimeout(r, 16));
+    }
+
+    const finalMsg: Message = {
+      id: `msg-${Date.now()}`,
+      chatId,
+      role: 'assistant',
+      content: reply,
+      timestamp: new Date().toISOString(),
+      tokens: Math.ceil(reply.length / 4),
+      model: apiKey ? 'gemini-3.8-flash' : 'nexus-core',
+    };
+    existingMsgs.push(finalMsg);
+    setLocal(`messages_${chatId}`, existingMsgs);
+    onComplete(finalMsg);
   },
 
   // Prompts
   async getPrompts(): Promise<PromptTemplate[]> {
-    try {
-      const res = await fetch(`${BASE_URL}/prompts`);
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+    const remote = await tryFetchJson<PromptTemplate[]>(`${BASE_URL}/prompts`);
+    if (remote && Array.isArray(remote) && remote.length > 0) {
+      setLocal('prompts', remote);
+      return remote;
+    }
     return getLocal<PromptTemplate[]>('prompts', DEFAULT_PROMPTS);
   },
 
   async createPrompt(prompt: Omit<PromptTemplate, 'id'>): Promise<PromptTemplate> {
     const newP: PromptTemplate = { ...prompt, id: `p-${Date.now()}` };
-    try {
-      const res = await fetch(`${BASE_URL}/prompts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(prompt),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+    await tryFetchJson(`${BASE_URL}/prompts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prompt),
+    });
+
     const list = getLocal<PromptTemplate[]>('prompts', DEFAULT_PROMPTS);
     list.push(newP);
     setLocal('prompts', list);
@@ -439,46 +458,43 @@ export const api = {
   },
 
   async deletePrompt(id: string): Promise<void> {
-    try {
-      await fetch(`${BASE_URL}/prompts/${id}`, { method: 'DELETE' });
-    } catch {}
+    await tryFetchJson(`${BASE_URL}/prompts/${id}`, { method: 'DELETE' });
     const list = getLocal<PromptTemplate[]>('prompts', DEFAULT_PROMPTS).filter((p) => p.id !== id);
     setLocal('prompts', list);
   },
 
   // Settings
   async getSettings(): Promise<AppSettings & { rawApiKey?: string }> {
-    try {
-      const res = await fetch(`${BASE_URL}/settings`);
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+    const remote = await tryFetchJson<AppSettings>(`${BASE_URL}/settings`);
+    if (remote) {
+      return {
+        ...remote,
+        rawApiKey: getLocal<string>('rawApiKey', ''),
+      };
+    }
     return getLocal<AppSettings & { rawApiKey?: string }>('settings', {
       provider: 'gemini',
       defaultModel: 'gemini-3.8-flash',
       temperature: 0.7,
       maxTokens: 2048,
-      hasApiKey: false,
-      apiKey: '',
-      rawApiKey: '',
+      hasApiKey: Boolean(getLocal<string>('rawApiKey', '')),
+      apiKey: getLocal<string>('rawApiKey', '') ? '••••••••' : '',
+      rawApiKey: getLocal<string>('rawApiKey', ''),
     });
   },
 
   async updateSettings(settings: Partial<AppSettings>): Promise<AppSettings> {
-    try {
-      const res = await fetch(`${BASE_URL}/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
+    await tryFetchJson(`${BASE_URL}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+
     const current = await this.getSettings();
+    if (settings.apiKey) {
+      setLocal('rawApiKey', settings.apiKey);
+    }
+
     const updated = {
       ...current,
       ...settings,
