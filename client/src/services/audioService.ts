@@ -1,6 +1,6 @@
 /**
  * Resilient Audio Service:
- * 1. Speech-to-Text (Voice Recognition) with fresh instance recreation per session
+ * 1. Speech-to-Text (Voice Recognition) with continuous dictation & pause resilience
  * 2. Web Audio API frequency analyzer for 3D visualizer
  * 3. Text-to-Speech with Chromium audio keep-alive
  */
@@ -14,8 +14,9 @@ class AudioService {
   private isSpeaking = false;
   private freqData: Uint8Array | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private restartTimeout: any = null;
 
-  // Initialize microphone listener for audio-reactive 3D visualizer
+  // Initialize microphone listener for audio-reactive 3D visualizer (independent from speech)
   async initMicVisualizer(): Promise<boolean> {
     try {
       if (!this.audioCtx) {
@@ -34,7 +35,6 @@ class AudioService {
         const source = this.audioCtx.createMediaStreamSource(this.micStream);
         this.analyser = this.audioCtx.createAnalyser();
         this.analyser.fftSize = 64;
-        this.analyser.smoothingTimeConstant = 0.8;
         source.connect(this.analyser);
         this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
       }
@@ -80,45 +80,81 @@ class AudioService {
     }
 
     try {
-      // Create fresh recognition instance every time to avoid InvalidStateError
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = false;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
+      if (this.restartTimeout) {
+        clearTimeout(this.restartTimeout);
+        this.restartTimeout = null;
+      }
 
       this.isListening = true;
+      this.recognition = new SpeechRecognition();
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
+      this.recognition.lang = 'en-US';
+      this.recognition.maxAlternatives = 1;
 
-      // Try initializing visualizer in background (non-blocking)
-      this.initMicVisualizer().catch(() => {});
+      let accumulatedFinal = '';
 
       this.recognition.onresult = (event: any) => {
         let interim = '';
-        let final = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const trans = event.results[i][0]?.transcript || '';
           if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
+            accumulatedFinal += (accumulatedFinal ? ' ' : '') + trans.trim();
           } else {
-            interim += event.results[i][0].transcript;
+            interim += trans;
           }
         }
 
-        onResult(final || interim, Boolean(final));
+        const combined = accumulatedFinal + (interim ? (accumulatedFinal ? ' ' : '') + interim : '');
+        if (combined.trim()) {
+          onResult(combined.trim(), Boolean(accumulatedFinal));
+        }
       };
 
       this.recognition.onerror = (event: any) => {
         console.warn('Speech recognition status:', event.error);
-        if (event.error === 'not-allowed') {
-          onError('Microphone permission denied. Please allow microphone access in your browser settings.');
-        } else if (event.error !== 'no-speech') {
-          onError(`Speech recognition notice: ${event.error}`);
+        if (event.error === 'no-speech') {
+          // Normal pause in speaking, keep listening!
+          return;
         }
-        this.isListening = false;
-        onEnd();
+
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          this.isListening = false;
+          onError('Microphone permission was denied. Please allow microphone permissions in your browser URL bar.');
+          onEnd();
+          return;
+        }
+
+        if (event.error === 'audio-capture') {
+          this.isListening = false;
+          onError('Microphone hardware not available or already in use by another application.');
+          onEnd();
+          return;
+        }
+
+        if (event.error === 'aborted') {
+          return;
+        }
       };
 
       this.recognition.onend = () => {
-        this.isListening = false;
+        // If still in listening state (e.g. Chrome automatic timeout after pause), seamlessly restart
+        if (this.isListening) {
+          this.restartTimeout = setTimeout(() => {
+            if (this.isListening) {
+              try {
+                this.recognition?.start();
+              } catch {
+                try {
+                  this.startListening(onResult, onError, onEnd);
+                } catch {}
+              }
+            }
+          }, 150);
+          return;
+        }
+
         onEnd();
       };
 
@@ -126,8 +162,8 @@ class AudioService {
       return true;
     } catch (err: any) {
       console.error('Failed to start speech recognition:', err);
-      onError(err?.message || 'Speech recognition initialization failed.');
       this.isListening = false;
+      onError(err?.message || 'Speech recognition initialization failed.');
       onEnd();
       return false;
     }
@@ -135,13 +171,17 @@ class AudioService {
 
   // Stop voice recognition
   stopListening(): void {
+    this.isListening = false;
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+      this.restartTimeout = null;
+    }
     if (this.recognition) {
       try {
         this.recognition.stop();
       } catch {}
       this.recognition = null;
     }
-    this.isListening = false;
   }
 
   // Text-To-Speech with Chromium keep-alive

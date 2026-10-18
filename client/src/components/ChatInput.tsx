@@ -31,6 +31,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [input, setInput] = useState('');
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -82,12 +83,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setIsListening(false);
       if (onListeningChange) onListeningChange(false);
     } else {
+      setMicError(null);
+      const initialText = input.trim();
       const started = audioService.startListening(
-        (transcript, isFinal) => {
-          setInput(transcript);
+        (transcript, _isFinal) => {
+          if (initialText) {
+            setInput(`${initialText} ${transcript}`);
+          } else {
+            setInput(transcript);
+          }
         },
         (error) => {
           console.warn('Voice error:', error);
+          setMicError(error);
           setIsListening(false);
           if (onListeningChange) onListeningChange(false);
         },
@@ -109,6 +117,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <div className="p-4 bg-[#070c18]/90 border-t border-cyan-500/20 backdrop-blur-md">
       <div className="max-w-3xl mx-auto">
+        {micError && (
+          <div className="mb-2.5 px-3 py-2 rounded-lg bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center justify-between shadow-lg">
+            <span>🎙️ {micError}</span>
+            <button
+              type="button"
+              onClick={() => setMicError(null)}
+              className="ml-3 text-red-300 hover:text-white font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {/* Quick Toolbar above input */}
         <div className="flex items-center justify-between mb-2 px-1 text-xs text-slate-400">
           <div className="flex items-center gap-2">
