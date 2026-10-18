@@ -10,6 +10,7 @@ import {
   Layers,
   Sparkles,
   Search,
+  X,
 } from 'lucide-react';
 import { ChatSession, Workspace } from '../types';
 
@@ -25,6 +26,8 @@ interface SidebarProps {
   onOpenWorkspaceModal: () => void;
   onOpenPromptLibrary: () => void;
   onOpenSettings: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -39,6 +42,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenWorkspaceModal,
   onOpenPromptLibrary,
   onOpenSettings,
+  isMobileOpen = false,
+  onCloseMobile,
 }) => {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,8 +54,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     c.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleSelectChat = (id: string) => {
+    onSelectChat(id);
+    if (onCloseMobile) onCloseMobile();
+  };
+
+  const handleNewChat = () => {
+    onNewChat();
+    if (onCloseMobile) onCloseMobile();
+  };
+
+  const handleSelectWorkspace = (id: string) => {
+    onSelectWorkspace(id);
+    setWorkspaceMenuOpen(false);
+    if (onCloseMobile) onCloseMobile();
+  };
+
   return (
-    <aside className="w-72 md:w-80 h-full flex flex-col bg-[#070c14] border-r border-slate-800/80 select-none">
+    <aside
+      className={`fixed md:static inset-y-0 left-0 z-50 w-72 sm:w-80 h-full flex flex-col bg-[#070c14] border-r border-slate-800/80 select-none transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none ${
+        isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}
+    >
       {/* Brand Header */}
       <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -62,6 +87,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <p className="text-[10px] text-slate-400 font-mono">Workspace Dashboard</p>
           </div>
         </div>
+
+        {/* Mobile Close Button */}
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 md:hidden"
+          title="Close sidebar"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Workspace Switcher */}
@@ -95,88 +130,88 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {workspaces.map((ws) => (
                 <button
                   key={ws.id}
-                  onClick={() => {
-                    onSelectWorkspace(ws.id);
-                    setWorkspaceMenuOpen(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-800 transition-colors ${
-                    activeWorkspaceId === ws.id ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300'
+                  onClick={() => handleSelectWorkspace(ws.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors ${
+                    activeWorkspaceId === ws.id
+                      ? 'bg-emerald-500/10 text-emerald-300 font-semibold'
+                      : 'text-slate-300 hover:bg-slate-800'
                   }`}
                 >
-                  <div className="truncate pr-2">
-                    <p className="font-medium truncate">{ws.name}</p>
+                  <Layers className="w-3.5 h-3.5 shrink-0" />
+                  <div className="truncate">
+                    <p className="truncate">{ws.name}</p>
                     <p className="text-[10px] text-slate-400 truncate">{ws.description}</p>
                   </div>
-                  {activeWorkspaceId === ws.id && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  )}
                 </button>
               ))}
 
-              <div className="border-t border-slate-800 mt-1 pt-1">
-                <button
-                  onClick={() => {
-                    setWorkspaceMenuOpen(false);
-                    onOpenWorkspaceModal();
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Create Workspace Context</span>
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setWorkspaceMenuOpen(false);
+                  onOpenWorkspaceModal();
+                  if (onCloseMobile) onCloseMobile();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-emerald-400 hover:bg-slate-800 border-t border-slate-800 mt-1 font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Workspace...</span>
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Action: New Chat & Search */}
-      <div className="p-3 space-y-2">
+      {/* New Chat Button & Search */}
+      <div className="p-3 space-y-2 border-b border-slate-800/40">
         <button
-          onClick={onNewChat}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-900/20 transition-all"
+          onClick={handleNewChat}
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-medium text-xs transition-all shadow-sm shadow-emerald-950/20 active:scale-98"
         >
           <Plus className="w-4 h-4" />
-          <span>New Chat Session</span>
+          <span>New Synthesis Chat</span>
         </button>
 
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            placeholder="Search sessions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search conversations..."
-            className="w-full pl-8 pr-3 py-1.5 bg-slate-900/70 border border-slate-800/80 rounded-md text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-700"
+            className="w-full bg-slate-900/60 border border-slate-800/80 rounded-md pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-700"
           />
         </div>
       </div>
 
-      {/* Chat History List */}
-      <div className="flex-1 overflow-y-auto px-2 space-y-1">
-        <div className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-          Recent Sessions ({filteredChats.length})
+      {/* Chat Sessions History List */}
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+        <div className="px-2 pb-1 text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider">
+          Sessions ({filteredChats.length})
         </div>
 
         {filteredChats.length === 0 ? (
-          <div className="text-center py-6 text-xs text-slate-400">
-            No chats found
+          <div className="p-4 text-center text-xs text-slate-400">
+            {searchQuery ? 'No matching sessions' : 'No chats yet'}
           </div>
         ) : (
           filteredChats.map((chat) => {
-            const isActive = chat.id === activeChatId;
+            const isActive = activeChatId === chat.id;
             return (
               <div
                 key={chat.id}
-                onClick={() => onSelectChat(chat.id)}
-                className={`group flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer transition-all ${
+                onClick={() => handleSelectChat(chat.id)}
+                className={`group flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-all ${
                   isActive
-                    ? 'bg-slate-800 text-white font-medium shadow-sm border border-slate-700/50'
-                    : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
+                    ? 'bg-slate-800/90 text-white border border-slate-700/60 shadow-sm'
+                    : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                  <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-500'}`} />
+                <div className="flex items-center gap-2 min-w-0">
+                  <MessageSquare
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      isActive ? 'text-emerald-400' : 'text-slate-500'
+                    }`}
+                  />
                   <span className="truncate">{chat.title}</span>
                 </div>
 
@@ -199,7 +234,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Footer Navigation */}
       <div className="p-3 border-t border-slate-800/60 bg-[#070c14]/90 space-y-1">
         <button
-          onClick={onOpenPromptLibrary}
+          onClick={() => {
+            onOpenPromptLibrary();
+            if (onCloseMobile) onCloseMobile();
+          }}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs text-slate-300 hover:bg-slate-850 hover:text-white transition-colors"
         >
           <BookOpen className="w-4 h-4 text-sky-400" />
@@ -207,7 +245,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <button
-          onClick={onOpenSettings}
+          onClick={() => {
+            onOpenSettings();
+            if (onCloseMobile) onCloseMobile();
+          }}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs text-slate-300 hover:bg-slate-850 hover:text-white transition-colors"
         >
           <Settings className="w-4 h-4 text-emerald-400" />

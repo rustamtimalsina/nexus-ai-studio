@@ -1,64 +1,36 @@
 /**
- * Resilient Audio Service:
- * 1. Speech-to-Text (Voice Recognition) with continuous dictation & pause resilience
- * 2. Web Audio API frequency analyzer for 3D visualizer
- * 3. Text-to-Speech with Chromium audio keep-alive
+ * Universal Resilient Audio Service:
+ * 1. Speech-to-Text (STT) compatible with Desktop Chrome, Edge, and iOS/Android Mobile Safari/Chrome.
+ * 2. Automatic platform adaptation:
+ *    - iOS Safari fails if continuous=true; we adapt continuous mode per platform.
+ *    - Handles pause timeouts seamlessly without dropping sessions.
+ * 3. Text-to-Speech (TTS) with Chromium audio keep-alive and natural voice selection.
  */
 
 class AudioService {
-  private audioCtx: AudioContext | null = null;
-  private analyser: AnalyserNode | null = null;
-  private micStream: MediaStream | null = null;
   private recognition: any = null;
   private isListening = false;
   private isSpeaking = false;
-  private freqData: Uint8Array | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
-  private restartTimeout: any = null;
+  private accumulatedText = '';
+  private restartTimer: any = null;
 
-  // Initialize microphone listener for audio-reactive 3D visualizer (independent from speech)
-  async initMicVisualizer(): Promise<boolean> {
-    try {
-      if (!this.audioCtx) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          this.audioCtx = new AudioContextClass();
-        }
-      }
+  // Platform detection
+  private isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+  private isMobile =
+    typeof navigator !== 'undefined' &&
+    (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '') ||
+      window.innerWidth < 768);
 
-      if (this.audioCtx && this.audioCtx.state === 'suspended') {
-        await this.audioCtx.resume();
-      }
-
-      if (this.audioCtx && !this.micStream && navigator.mediaDevices?.getUserMedia) {
-        this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        const source = this.audioCtx.createMediaStreamSource(this.micStream);
-        this.analyser = this.audioCtx.createAnalyser();
-        this.analyser.fftSize = 64;
-        source.connect(this.analyser);
-        this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
-      }
-      return true;
-    } catch (err) {
-      console.warn('Microphone stream access unavailable for visualizer:', err);
-      return false;
-    }
+  // Check if browser has speech recognition
+  isSpeechSupported(): boolean {
+    if (typeof window === 'undefined') return false;
+    return Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   }
 
-  // Get normalized audio energy level (0.0 to 1.0)
+  // Energy level for 3D visualizer
   getAudioLevel(): number {
-    if (!this.analyser || !this.freqData) return 0;
-    try {
-      (this.analyser.getByteFrequencyData as any)(this.freqData);
-      let sum = 0;
-      for (let i = 0; i < this.freqData.length; i++) {
-        sum += this.freqData[i];
-      }
-      const avg = sum / this.freqData.length;
-      return Math.min(avg / 128, 1.0);
-    } catch {
-      return 0;
-    }
+    return 0;
   }
 
   // Start voice recognition
@@ -71,120 +43,144 @@ class AudioService {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      onError('Speech Recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
+      onError('Speech Recognition is not supported in this browser. Please open in Google Chrome, Microsoft Edge, or Safari.');
       return false;
     }
 
-    if (this.isListening) {
-      this.stopListening();
-    }
+    // Reset previous session
+    this.stopListening();
 
-    try {
-      if (this.restartTimeout) {
-        clearTimeout(this.restartTimeout);
-        this.restartTimeout = null;
-      }
+    this.isListening = true;
+    this.accumulatedText = '';
 
-      this.isListening = true;
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
-      this.recognition.maxAlternatives = 1;
+    const setupAndStart = () => {
+      if (!this.isListening) return;
 
-      let accumulatedFinal = '';
+      try {
+        const recognition = new SpeechRecognition();
+        this.recognition = recognition;
 
-      this.recognition.onresult = (event: any) => {
-        let interim = '';
+        // In iOS WebKit, setting continuous: true silently breaks speech recognition.
+        // On Desktop Chrome, continuous: true allows long streaming dictation.
+        recognition.continuous = !this.isIOS;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+        recognition.lang = navigator.language || 'en-US';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const trans = event.results[i][0]?.transcript || '';
-          if (event.results[i].isFinal) {
-            accumulatedFinal += (accumulatedFinal ? ' ' : '') + trans.trim();
-          } else {
-            interim += trans;
-          }
-        }
+        let latestSessionTranscript = '';
 
-        const combined = accumulatedFinal + (interim ? (accumulatedFinal ? ' ' : '') + interim : '');
-        if (combined.trim()) {
-          onResult(combined.trim(), Boolean(accumulatedFinal));
-        }
-      };
+        recognition.onstart = () => {
+          console.log('[Voice STT] Speech recognition started');
+        };
 
-      this.recognition.onerror = (event: any) => {
-        console.warn('Speech recognition status:', event.error);
-        if (event.error === 'no-speech') {
-          // Normal pause in speaking, keep listening!
-          return;
-        }
+        recognition.onresult = (event: any) => {
+          let interim = '';
+          let final = '';
 
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          this.isListening = false;
-          onError('Microphone permission was denied. Please allow microphone permissions in your browser URL bar.');
-          onEnd();
-          return;
-        }
-
-        if (event.error === 'audio-capture') {
-          this.isListening = false;
-          onError('Microphone hardware not available or already in use by another application.');
-          onEnd();
-          return;
-        }
-
-        if (event.error === 'aborted') {
-          return;
-        }
-      };
-
-      this.recognition.onend = () => {
-        // If still in listening state (e.g. Chrome automatic timeout after pause), seamlessly restart
-        if (this.isListening) {
-          this.restartTimeout = setTimeout(() => {
-            if (this.isListening) {
-              try {
-                this.recognition?.start();
-              } catch {
-                try {
-                  this.startListening(onResult, onError, onEnd);
-                } catch {}
+          for (let i = 0; i < event.results.length; ++i) {
+            const item = event.results[i];
+            if (item && item[0]) {
+              if (item.isFinal) {
+                final += item[0].transcript;
+              } else {
+                interim += item[0].transcript;
               }
             }
-          }, 150);
-          return;
-        }
+          }
 
+          latestSessionTranscript = (final || interim).trim();
+
+          const combined = [this.accumulatedText, latestSessionTranscript]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+
+          if (combined) {
+            onResult(combined, Boolean(final));
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn('[Voice STT] Status/Error event:', event.error);
+
+          // Benign events in Web Speech API: do not abort
+          if (event.error === 'no-speech' || event.error === 'aborted') {
+            return;
+          }
+
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            this.isListening = false;
+            onError('Microphone access was denied. Please allow microphone permissions in your browser URL bar.');
+            onEnd();
+            return;
+          }
+
+          if (event.error === 'audio-capture') {
+            this.isListening = false;
+            onError('Microphone not detected or busy with another app.');
+            onEnd();
+            return;
+          }
+
+          if (event.error === 'network') {
+            onError('Speech recognition network warning. Transcription will resume once connection stabilizes.');
+          }
+        };
+
+        recognition.onend = () => {
+          console.log('[Voice STT] Recognition session ended');
+
+          // If session produced final/interim text, save it into accumulated history
+          if (latestSessionTranscript) {
+            this.accumulatedText = [this.accumulatedText, latestSessionTranscript]
+              .filter(Boolean)
+              .join(' ')
+              .trim();
+            latestSessionTranscript = '';
+          }
+
+          // If the user hasn't explicitly clicked stop, auto-restart fresh instance seamlessly
+          if (this.isListening) {
+            this.restartTimer = setTimeout(() => {
+              if (this.isListening) {
+                setupAndStart();
+              }
+            }, 100);
+            return;
+          }
+
+          onEnd();
+        };
+
+        recognition.start();
+      } catch (err: any) {
+        console.error('[Voice STT] Initialization error:', err);
+        this.isListening = false;
+        onError(err?.message || 'Could not access speech recognition service.');
         onEnd();
-      };
+      }
+    };
 
-      this.recognition.start();
-      return true;
-    } catch (err: any) {
-      console.error('Failed to start speech recognition:', err);
-      this.isListening = false;
-      onError(err?.message || 'Speech recognition initialization failed.');
-      onEnd();
-      return false;
-    }
+    setupAndStart();
+    return true;
   }
 
   // Stop voice recognition
   stopListening(): void {
     this.isListening = false;
-    if (this.restartTimeout) {
-      clearTimeout(this.restartTimeout);
-      this.restartTimeout = null;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
     }
     if (this.recognition) {
       try {
-        this.recognition.stop();
+        this.recognition.abort();
       } catch {}
       this.recognition = null;
     }
   }
 
-  // Text-To-Speech with Chromium keep-alive
+  // Text-To-Speech with Chromium audio keep-alive
   speak(text: string, onStart?: () => void, onEnd?: () => void): void {
     if (!('speechSynthesis' in window)) return;
 

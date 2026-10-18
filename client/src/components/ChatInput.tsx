@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff } from 'lucide-react';
+import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff, Volume2 } from 'lucide-react';
 import { audioService } from '../services/audioService';
 
 interface ChatInputProps {
@@ -84,11 +84,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (onListeningChange) onListeningChange(false);
     } else {
       setMicError(null);
-      const initialText = input.trim();
+      const preExisting = input.trim();
+
       const started = audioService.startListening(
         (transcript, _isFinal) => {
-          if (initialText) {
-            setInput(`${initialText} ${transcript}`);
+          if (preExisting) {
+            setInput(`${preExisting} ${transcript}`);
           } else {
             setInput(transcript);
           }
@@ -115,20 +116,40 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const activeModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
 
   return (
-    <div className="p-4 bg-[#070c18]/90 border-t border-cyan-500/20 backdrop-blur-md">
+    <div className="p-2 sm:p-4 bg-[#070c18]/95 border-t border-cyan-500/20 backdrop-blur-md">
       <div className="max-w-3xl mx-auto">
+        {/* Error Notification */}
         {micError && (
-          <div className="mb-2.5 px-3 py-2 rounded-lg bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center justify-between shadow-lg">
-            <span>🎙️ {micError}</span>
+          <div className="mb-2 px-3 py-2 rounded-lg bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center justify-between shadow-lg">
+            <span className="truncate pr-2">🎙️ {micError}</span>
             <button
               type="button"
               onClick={() => setMicError(null)}
-              className="ml-3 text-red-300 hover:text-white font-bold"
+              className="text-red-300 hover:text-white font-bold shrink-0 px-1"
             >
               ✕
             </button>
           </div>
         )}
+
+        {/* Live Active Voice Listening Indicator */}
+        {isListening && (
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-cyan-950/70 border border-cyan-500/50 text-cyan-300 text-xs flex items-center justify-between shadow-lg animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+              <span className="font-semibold text-white">Listening to your voice...</span>
+              <span className="hidden sm:inline text-cyan-400/80">Speak naturally</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleMic}
+              className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/30"
+            >
+              Done / Stop
+            </button>
+          </div>
+        )}
+
         {/* Quick Toolbar above input */}
         <div className="flex items-center justify-between mb-2 px-1 text-xs text-slate-400">
           <div className="flex items-center gap-2">
@@ -139,9 +160,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-750 border border-cyan-500/30 text-cyan-300 hover:text-white transition-colors"
               >
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="font-medium">{activeModel.name}</span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="font-medium text-xs max-w-[120px] sm:max-w-none truncate">
+                  {activeModel.name}
+                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
               </button>
 
               {modelDropdownOpen && (
@@ -170,14 +193,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               )}
             </div>
 
-            {/* Prompt Library Button */}
+            {/* Prompt Library Button (visible on mobile too!) */}
             <button
               type="button"
               onClick={onOpenPromptLibrary}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-cyan-300 border border-slate-700/60 transition-colors text-xs"
+              title="Open Prompt Library"
             >
-              <BookOpen className="w-3.5 h-3.5 text-sky-400" />
-              <span>Prompt Library</span>
+              <BookOpen className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <span className="hidden sm:inline">Prompt Library</span>
+              <span className="sm:hidden">Prompts</span>
             </button>
           </div>
 
@@ -191,7 +216,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onSubmit={handleSubmit}
           className={`relative flex items-end rounded-xl border bg-slate-950/80 shadow-2xl transition-all ${
             isListening
-              ? 'border-fuchsia-500/80 ring-2 ring-fuchsia-500/30'
+              ? 'border-cyan-400 ring-2 ring-cyan-500/30'
               : 'border-cyan-500/30 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/40'
           }`}
         >
@@ -203,23 +228,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={
               isListening
-                ? '🎙️ Listening to your voice... Speak now'
-                : 'Ask anything, explore ideas, or click the mic to speak...'
+                ? '🎙️ Listening... Speak now (words will appear here)'
+                : 'Ask anything, explore ideas, or tap the mic to speak...'
             }
             disabled={isLoading}
-            className="w-full resize-none bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none max-h-48 disabled:opacity-50"
+            className="w-full resize-none bg-transparent px-3 sm:px-4 py-3 text-base sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none max-h-40 disabled:opacity-50"
           />
 
-          <div className="p-2 flex items-center gap-1.5 shrink-0">
+          <div className="p-1.5 sm:p-2 flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Microphone Voice Button */}
             <button
               type="button"
               onClick={handleToggleMic}
               disabled={isLoading}
-              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-md ${
+              className={`flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg transition-all shadow-md ${
                 isListening
                   ? 'bg-fuchsia-600 text-white animate-pulse shadow-fuchsia-900/50 ring-2 ring-fuchsia-400'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-400'
+                  : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-cyan-400 active:scale-95'
               }`}
               title={isListening ? 'Stop voice recording' : 'Speak with your microphone'}
             >
@@ -230,7 +255,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 disabled:opacity-40 text-white transition-all shadow-md shadow-cyan-950/50"
+              className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 disabled:opacity-40 text-white transition-all shadow-md shadow-cyan-950/50 active:scale-95"
               title="Send message"
             >
               <Send className="w-4 h-4" />

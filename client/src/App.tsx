@@ -197,11 +197,22 @@ export const App: React.FC = () => {
     }
   };
 
+  // Mobile sidebar state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
   const activeChat = chats.find((c) => c.id === activeChatId) || null;
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || null;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#070c14]">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#070c14] relative">
+      {/* Mobile Backdrop Overlay */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-200"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <Sidebar
         chats={chats}
@@ -215,6 +226,8 @@ export const App: React.FC = () => {
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
         onOpenPromptLibrary={() => setIsPromptLibraryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Chat Interface */}
@@ -229,6 +242,7 @@ export const App: React.FC = () => {
         onSelectPromptText={(promptText) => {
           handleSendMessage(promptText, activeChat?.model || settings.defaultModel || 'gemini-3.8-flash');
         }}
+        onToggleMobileMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
       />
 
       {/* Modals */}
