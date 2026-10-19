@@ -2,6 +2,14 @@ export type Role = 'user' | 'assistant' | 'system';
 
 export type VoiceState = 'idle' | 'listening' | 'transcribing' | 'speaking';
 
+export interface MessageAttachment {
+  type: 'image';
+  url: string;
+  mimeType: string;
+  name?: string;
+  base64?: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -10,6 +18,7 @@ export interface Message {
   timestamp: string;
   tokens?: number;
   model?: string;
+  attachments?: MessageAttachment[];
 }
 
 export interface ChatSession {

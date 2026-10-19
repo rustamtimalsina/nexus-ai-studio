@@ -18,7 +18,7 @@ import {
   Palette,
   Search,
 } from 'lucide-react';
-import { ChatSession, Message, Workspace, VoiceState } from '../types';
+import { ChatSession, Message, Workspace, VoiceState, MessageAttachment } from '../types';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { AI3DCore, AITheme } from './AI3DCore';
@@ -31,7 +31,7 @@ interface ChatViewProps {
   workspace: Workspace | null;
   isLoading: boolean;
   streamingContent: string;
-  onSendMessage: (content: string, model: string) => void;
+  onSendMessage: (content: string, model: string, attachment?: MessageAttachment) => void;
   onOpenPromptLibrary: () => void;
   onSelectPromptText: (text: string) => void;
   onToggleMobileMenu?: () => void;

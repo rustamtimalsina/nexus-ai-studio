@@ -1,4 +1,4 @@
-import { ChatSession, Message, Workspace, PromptTemplate, AppSettings } from '../types';
+import { ChatSession, Message, Workspace, PromptTemplate, AppSettings, MessageAttachment } from '../types';
 
 const BASE_URL = '/api';
 
@@ -225,7 +225,8 @@ export const api = {
     onChunk: (chunk: string) => void,
     onComplete: (fullMessage: Message) => void,
     onError: (err: any) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    attachment?: MessageAttachment
   ): Promise<void> {
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
@@ -234,6 +235,7 @@ export const api = {
       content,
       timestamp: new Date().toISOString(),
       tokens: Math.ceil(content.length / 4),
+      attachments: attachment ? [attachment] : undefined,
     };
 
     onUserMessage(userMessage);
@@ -248,7 +250,7 @@ export const api = {
       const response = await fetch(`${BASE_URL}/chats/${chatId}/messages/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, model }),
+        body: JSON.stringify({ content, model, attachment }),
         signal,
       });
 

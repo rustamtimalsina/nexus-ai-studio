@@ -324,6 +324,31 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </span>
           </div>
 
+          {/* Attached Multimodal Media */}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {message.attachments.map((att, i) => (
+                <div
+                  key={i}
+                  className="group relative rounded-xl overflow-hidden border border-cyan-500/30 bg-slate-950/80 shadow-md max-w-xs"
+                >
+                  <img
+                    src={att.url}
+                    alt={att.name || 'Uploaded image'}
+                    className="max-h-60 w-auto object-contain cursor-pointer transition-transform hover:scale-102"
+                    onClick={() => window.open(att.url, '_blank')}
+                    title="Click to view full image in new tab"
+                  />
+                  {att.name && (
+                    <div className="px-2.5 py-1 text-[10px] font-mono text-slate-400 bg-slate-900/90 truncate border-t border-slate-800">
+                      {att.name}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="text-slate-200 select-text">
             {renderFormattedContent(message.content)}
             {isStreaming && (

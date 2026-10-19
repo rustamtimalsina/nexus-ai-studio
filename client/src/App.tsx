@@ -9,7 +9,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { AITheme } from './components/AI3DCore';
 import { soundService } from './services/soundService';
 import { api } from './services/api';
-import { ChatSession, Message, Workspace, PromptTemplate, AppSettings } from './types';
+import { ChatSession, Message, Workspace, PromptTemplate, AppSettings, MessageAttachment } from './types';
 
 export const App: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -216,13 +216,13 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handle sending a message with live stream & abort controller
-  const handleSendMessage = async (content: string, model: string) => {
+  // Handle sending a message with live stream & abort controller & attachment
+  const handleSendMessage = async (content: string, model: string, attachment?: MessageAttachment) => {
     let currentChatId = activeChatId;
 
     if (!currentChatId) {
       const created = await api.createChat({
-        title: content.slice(0, 30),
+        title: content.slice(0, 30) || (attachment?.name ? `Image: ${attachment.name.slice(0, 20)}` : 'Visual Analysis'),
         workspaceId: activeWorkspaceId,
         model,
       });
@@ -249,7 +249,7 @@ export const App: React.FC = () => {
         setChats((prev) =>
           prev.map((c) =>
             c.id === currentChatId && c.title === 'New Chat'
-              ? { ...c, title: content.slice(0, 30) }
+              ? { ...c, title: content.slice(0, 30) || (attachment?.name ? `Image: ${attachment.name.slice(0, 20)}` : 'Visual Analysis') }
               : c
           )
         );
@@ -272,7 +272,8 @@ export const App: React.FC = () => {
         setStreamingContent('');
         abortControllerRef.current = null;
       },
-      controller.signal
+      controller.signal,
+      attachment
     );
   };
 

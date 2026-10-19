@@ -23,6 +23,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const content = body?.content || '';
+  const attachment = body?.attachment;
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -35,7 +36,25 @@ export default async function handler(req: any, res: any) {
     let usedModel = 'gemini-3.5-flash';
 
     const systemInstruction =
-      'You are NexusAI Studio, an interactive, smart, and friendly AI assistant created and engineered by Rustam Timalsina. Always answer naturally, intelligently, and helpfully. If asked who created or made you, proudly confirm that Rustam Timalsina built you using React, TypeScript, Three.js, and Google Gemini.';
+      'You are NexusAI Studio, an interactive, smart, and friendly AI assistant created and engineered by Rustam Timalsina. Always answer naturally, intelligently, and helpfully. If analyzing an image or screenshot, describe it thoroughly and if requested, generate clean runnable HTML/Tailwind/React code so the user can preview it in the live Artifact Canvas.';
+
+    // Build multimodal user parts
+    const userParts: any[] = [];
+    if (content.trim()) {
+      userParts.push({ text: content });
+    }
+    if (attachment && attachment.base64) {
+      const cleanBase64 = attachment.base64.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+      userParts.push({
+        inline_data: {
+          mime_type: attachment.mimeType || 'image/png',
+          data: cleanBase64,
+        },
+      });
+    }
+    if (userParts.length === 0) {
+      userParts.push({ text: 'Please analyze this uploaded visual media in detail.' });
+    }
 
     for (const modelName of candidateModels) {
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
@@ -50,7 +69,7 @@ export default async function handler(req: any, res: any) {
             contents: [
               {
                 role: 'user',
-                parts: [{ text: content }],
+                parts: userParts,
               },
             ],
           }),

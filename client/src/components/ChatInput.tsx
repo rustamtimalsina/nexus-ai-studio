@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff, Square, ShieldCheck } from 'lucide-react';
+import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff, Square, ShieldCheck, Paperclip, X, Image as ImageIcon } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { soundService } from '../services/soundService';
-import { VoiceState } from '../types';
+import { VoiceState, MessageAttachment } from '../types';
 import { VoiceStatusHUD } from './VoiceStatusHUD';
 
 interface ChatInputProps {
-  onSendMessage: (content: string, model: string) => void;
+  onSendMessage: (content: string, model: string, attachment?: MessageAttachment) => void;
   isLoading: boolean;
   selectedModel: string;
   onSelectModel: (model: string) => void;
@@ -38,8 +38,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [attachedImage, setAttachedImage] = useState<MessageAttachment | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -63,15 +66,77 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleFileProcess = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, WebP, GIF, or SVG).');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Image size exceeds 8MB limit.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAttachedImage({
+        type: 'image',
+        url: dataUrl,
+        base64: dataUrl,
+        mimeType: file.type || 'image/png',
+        name: file.name,
+      });
+      soundService.playClick();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileProcess(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleFileProcess(file);
+            break;
+          }
+        }
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      handleFileProcess(file);
+    }
+  };
+
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && !attachedImage) || isLoading) return;
     if (isListening) {
       handleToggleMic();
     }
     soundService.playSend();
-    onSendMessage(input.trim(), selectedModel);
+    const messageContent = input.trim() || (attachedImage ? 'Analyze this uploaded image and explain it.' : '');
+    onSendMessage(messageContent, selectedModel, attachedImage || undefined);
     setInput('');
+    setAttachedImage(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -234,82 +299,151 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         </div>
 
-        {/* Input box */}
+        {/* Hidden File Input for Image Upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        {/* Input box with Drag & Drop */}
         <form
           onSubmit={handleSubmit}
-          className={`relative flex items-end rounded-xl border bg-slate-950/80 shadow-2xl transition-all ${
-            isListening
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={`relative flex flex-col rounded-xl border bg-slate-950/80 shadow-2xl transition-all ${
+            isDragging
+              ? 'border-cyan-400 border-dashed ring-2 ring-cyan-500/50 bg-cyan-950/20'
+              : isListening
               ? 'border-rose-500/80 ring-2 ring-rose-500/30'
               : 'border-cyan-500/30 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/40'
           }`}
         >
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              isListening
-                ? '🎙️ Listening... Speak now (words will appear here)'
-                : 'Ask anything, explore ideas, or tap the mic to speak...'
-            }
-            disabled={isLoading}
-            className="w-full resize-none bg-transparent px-3 sm:px-4 py-3 text-base sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none max-h-40 disabled:opacity-50"
-          />
-
-          <div className="p-1.5 sm:p-2 flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Microphone Voice Button with Persistent Mic Status */}
-            <button
-              type="button"
-              onClick={handleToggleMic}
-              disabled={isLoading}
-              className={`relative flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg transition-all shadow-md ${
-                isListening
-                  ? 'bg-rose-600 text-white animate-pulse shadow-rose-900/60 ring-2 ring-rose-400'
-                  : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-cyan-400 active:scale-95'
-              }`}
-              title={
-                isListening
-                  ? 'Stop voice recording'
-                  : 'Speak with your microphone (Mic is currently inactive & muted)'
-              }
-            >
-              {isListening ? (
-                <Mic className="w-4 h-4 text-white animate-bounce" />
-              ) : (
-                <Mic className="w-4 h-4 text-slate-300" />
-              )}
-              {!isListening && (
-                <span
-                  className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center"
-                  title="Mic is cleanly terminated"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                </span>
-              )}
-            </button>
-
-            {/* Submit / Stop Button */}
-            {isLoading ? (
+          {/* Attached Image Preview Chip */}
+          {attachedImage && (
+            <div className="mx-3 mt-2.5 p-2 rounded-lg bg-slate-900 border border-cyan-500/40 flex items-center justify-between gap-3 shadow-lg animate-in fade-in">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <img
+                  src={attachedImage.url}
+                  alt={attachedImage.name || 'Attachment'}
+                  className="w-12 h-12 object-cover rounded-md border border-cyan-500/30 shrink-0"
+                />
+                <div className="min-w-0 text-left">
+                  <p className="text-xs font-semibold text-slate-100 truncate max-w-[180px] sm:max-w-xs">
+                    {attachedImage.name || 'Attached Image'}
+                  </p>
+                  <p className="text-[10px] text-cyan-400 font-mono flex items-center gap-1">
+                    <ImageIcon className="w-3 h-3" />
+                    <span>Vision Multimodal Ready</span>
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={onStopGenerating}
-                className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md shadow-rose-950/60 active:scale-95 animate-pulse"
-                title="Stop generation"
+                onClick={() => setAttachedImage(null)}
+                className="p-1 rounded-md text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                title="Remove image"
               >
-                <Square className="w-3.5 h-3.5 fill-current" />
+                <X className="w-4 h-4" />
               </button>
-            ) : (
+            </div>
+          )}
+
+          <div className="relative flex items-end w-full">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={
+                isDragging
+                  ? '🖼️ Drop image here to attach for Vision analysis...'
+                  : isListening
+                  ? '🎙️ Listening... Speak now (words will appear here)'
+                  : attachedImage
+                  ? 'Ask anything about this image (or press Send to analyze)...'
+                  : 'Ask anything, paste an image/screenshot, or tap mic...'
+              }
+              disabled={isLoading}
+              className="w-full resize-none bg-transparent px-3 sm:px-4 py-3 text-base sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none max-h-40 disabled:opacity-50"
+            />
+
+            <div className="p-1.5 sm:p-2 flex items-center gap-1 sm:gap-1.5 shrink-0">
+              {/* Paperclip Image Attachment Button */}
               <button
-                type="submit"
-                disabled={!input.trim()}
-                className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 disabled:opacity-40 text-white transition-all shadow-md shadow-cyan-950/50 active:scale-95"
-                title="Send message"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading}
+                className={`flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg transition-all shadow-md ${
+                  attachedImage
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                    : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-cyan-400 active:scale-95'
+                }`}
+                title="Attach an image or screenshot for Vision analysis (or paste Ctrl+V)"
               >
-                <Send className="w-4 h-4" />
+                <Paperclip className="w-4 h-4" />
               </button>
-            )}
+
+              {/* Microphone Voice Button with Persistent Mic Status */}
+              <button
+                type="button"
+                onClick={handleToggleMic}
+                disabled={isLoading}
+                className={`relative flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg transition-all shadow-md ${
+                  isListening
+                    ? 'bg-rose-600 text-white animate-pulse shadow-rose-900/60 ring-2 ring-rose-400'
+                    : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-cyan-400 active:scale-95'
+                }`}
+                title={
+                  isListening
+                    ? 'Stop voice recording'
+                    : 'Speak with your microphone (Mic is currently inactive & muted)'
+                }
+              >
+                {isListening ? (
+                  <Mic className="w-4 h-4 text-white animate-bounce" />
+                ) : (
+                  <Mic className="w-4 h-4 text-slate-300" />
+                )}
+                {!isListening && (
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center"
+                    title="Mic is cleanly terminated"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                  </span>
+                )}
+              </button>
+
+              {/* Submit / Stop Button */}
+              {isLoading ? (
+                <button
+                  type="button"
+                  onClick={onStopGenerating}
+                  className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md shadow-rose-950/60 active:scale-95 animate-pulse"
+                  title="Stop generation"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={(!input.trim() && !attachedImage)}
+                  className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 disabled:opacity-40 text-white transition-all shadow-md shadow-cyan-950/50 active:scale-95"
+                  title="Send message"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>
