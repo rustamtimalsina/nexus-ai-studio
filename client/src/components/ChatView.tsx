@@ -17,6 +17,7 @@ import {
   VolumeX,
   Palette,
   Search,
+  Radio,
 } from 'lucide-react';
 import { ChatSession, Message, Workspace, VoiceState, MessageAttachment } from '../types';
 import { ChatMessage } from './ChatMessage';
@@ -24,6 +25,7 @@ import { ChatInput } from './ChatInput';
 import { AI3DCore, AITheme } from './AI3DCore';
 import { ArtifactData } from './ArtifactCanvas';
 import { soundService } from '../services/soundService';
+import { audioService } from '../services/audioService';
 
 interface ChatViewProps {
   chat: ChatSession | null;
@@ -76,7 +78,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [autoVoice, setAutoVoice] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('nexus_auto_voice') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevIsLoadingRef = useRef(isLoading);
 
   const currentVoiceState: VoiceState = isListening
     ? 'listening'
@@ -94,6 +104,22 @@ export const ChatView: React.FC<ChatViewProps> = ({
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamingContent]);
+
+  // Hands-free Auto Voice Speech Output
+  useEffect(() => {
+    if (prevIsLoadingRef.current && !isLoading && autoVoice) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant') {
+        setIsSpeaking(true);
+        audioService.speak(
+          lastMsg.content,
+          () => setIsSpeaking(true),
+          () => setIsSpeaking(false)
+        );
+      }
+    }
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading, messages, autoVoice]);
 
   useEffect(() => {
     if (chat?.model) {
@@ -260,6 +286,37 @@ export const ChatView: React.FC<ChatViewProps> = ({
               {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
             </button>
           )}
+
+          {/* Hands-Free Auto Voice Mode Toggle */}
+          <button
+            onClick={() => {
+              soundService.playClick();
+              const next = !autoVoice;
+              setAutoVoice(next);
+              if (!next) {
+                audioService.stopSpeaking();
+                setIsSpeaking(false);
+              }
+              try {
+                localStorage.setItem('nexus_auto_voice', String(next));
+              } catch {}
+            }}
+            className={`flex items-center gap-1.5 text-xs px-2 sm:px-2.5 py-1 rounded-lg border transition-all ${
+              autoVoice
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm shadow-rose-950 animate-pulse'
+                : 'bg-slate-800/60 text-slate-400 border-slate-700/60 hover:text-white'
+            }`}
+            title={
+              autoVoice
+                ? 'Auto Voice: ON (AI will speak responses aloud automatically)'
+                : 'Auto Voice: OFF (Click to enable hands-free voice mode)'
+            }
+          >
+            <Radio className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline font-mono text-[11px]">
+              {autoVoice ? 'Auto Voice: ON' : 'Auto Voice'}
+            </span>
+          </button>
 
           {/* Export Chat Button */}
           {chat && onExportChat && (

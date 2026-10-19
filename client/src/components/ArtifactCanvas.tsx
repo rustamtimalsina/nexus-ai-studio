@@ -31,11 +31,15 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
   const [copied, setCopied] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [iframeKey, setIframeKey] = useState(0);
+  const [editableCode, setEditableCode] = useState<string>('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     setLogs([]);
     setIframeKey((k) => k + 1);
+    if (artifact) {
+      setEditableCode(artifact.code);
+    }
   }, [artifact]);
 
   if (!artifact) return null;
@@ -55,7 +59,7 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
     artifact.language.toLowerCase() === 'ts';
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(artifact.code);
+    navigator.clipboard.writeText(editableCode || artifact.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -72,7 +76,8 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
-    const blob = new Blob([artifact.code], { type: 'text/plain;charset=utf-8' });
+    const currentCode = editableCode || artifact.code;
+    const blob = new Blob([currentCode], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -98,7 +103,7 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
 
   // Generate safe sandboxed HTML payload with console listener
   const generatePreviewHtml = () => {
-    let rawCode = artifact.code;
+    let rawCode = editableCode || artifact.code;
 
     // If bare SVG, wrap it nicely in centered dark backdrop
     if (artifact.language.toLowerCase() === 'svg' || (rawCode.trim().startsWith('<svg') && rawCode.trim().endsWith('</svg>'))) {
@@ -313,12 +318,71 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
           </div>
         )}
 
-        {/* Tab 2: Syntax Highlighted Code */}
+        {/* Tab 2: Live Interactive Code Editor with Hot Reload */}
         {activeTab === 'code' && (
-          <div className="w-full h-full overflow-auto p-4 font-mono text-xs leading-relaxed text-slate-200">
-            <pre className="text-cyan-300 select-text whitespace-pre-wrap break-all">
-              {artifact.code}
-            </pre>
+          <div className="w-full h-full flex flex-col bg-[#050811]">
+            <div className="h-9 px-4 bg-slate-900/90 border-b border-cyan-500/20 flex items-center justify-between text-xs text-slate-400 font-mono shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                <span className="text-[11px] text-cyan-300 font-semibold uppercase">
+                  Live Editor ({artifact.language})
+                </span>
+                {editableCode !== artifact.code && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    Modified
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {editableCode !== artifact.code && (
+                  <button
+                    onClick={() => {
+                      setEditableCode(artifact.code);
+                      setIframeKey((k) => k + 1);
+                    }}
+                    className="text-[10px] text-slate-400 hover:text-white underline hover:no-underline"
+                  >
+                    Reset to original
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setActiveTab('preview');
+                    setIframeKey((k) => k + 1);
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[11px] font-medium"
+                >
+                  <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
+                  <span>Run in Preview</span>
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 relative overflow-hidden">
+              <textarea
+                value={editableCode}
+                onChange={(e) => {
+                  setEditableCode(e.target.value);
+                  setIframeKey((k) => k + 1);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const target = e.target as HTMLTextAreaElement;
+                    const start = target.selectionStart;
+                    const end = target.selectionEnd;
+                    const value = target.value;
+                    const newValue = value.substring(0, start) + '  ' + value.substring(end);
+                    setEditableCode(newValue);
+                    setTimeout(() => {
+                      target.selectionStart = target.selectionEnd = start + 2;
+                    }, 0);
+                  }
+                }}
+                spellCheck={false}
+                className="w-full h-full p-4 bg-transparent text-cyan-300 font-mono text-xs leading-relaxed resize-none focus:outline-none focus:ring-0 select-text overflow-auto"
+                placeholder="Type or edit code here..."
+              />
+            </div>
           </div>
         )}
 
