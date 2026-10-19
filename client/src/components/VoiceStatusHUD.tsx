@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mic, MicOff, ShieldCheck, Volume2, Loader2, Radio } from 'lucide-react';
 import { VoiceState } from '../types';
+import { audioService } from '../services/audioService';
 
 interface VoiceStatusHUDProps {
   voiceState: VoiceState;
@@ -8,6 +9,37 @@ interface VoiceStatusHUDProps {
   className?: string;
   compact?: boolean;
 }
+
+const LiveFrequencyVisualizer: React.FC<{ colorClass: string; active: boolean }> = ({
+  colorClass,
+  active,
+}) => {
+  const [bars, setBars] = useState<number[]>(() => Array(10).fill(0.15));
+
+  useEffect(() => {
+    if (!active) return;
+    let animId: number;
+    const loop = () => {
+      const data = audioService.getFrequencyData().slice(0, 10);
+      setBars(data);
+      animId = requestAnimationFrame(loop);
+    };
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [active]);
+
+  return (
+    <div className="flex items-end gap-0.5 h-3.5 px-0.5">
+      {bars.map((v, i) => (
+        <span
+          key={i}
+          className={`w-0.5 rounded-full transition-all duration-75 ${colorClass}`}
+          style={{ height: `${Math.max(2.5, Math.min(14, v * 16))}px` }}
+        />
+      ))}
+    </div>
+  );
+};
 
 export const VoiceStatusHUD: React.FC<VoiceStatusHUDProps> = ({
   voiceState,
@@ -33,14 +65,8 @@ export const VoiceStatusHUD: React.FC<VoiceStatusHUDProps> = ({
             <span className="font-mono text-[11px] font-bold tracking-wider text-rose-100 uppercase">
               Listening
             </span>
-            {/* Live Audio Equalizer Bars */}
-            <div className="flex items-center gap-0.5 h-3.5">
-              <span className="w-0.5 h-2 bg-rose-400 rounded-full animate-[pulse_0.4s_ease-in-out_infinite]" />
-              <span className="w-0.5 h-3.5 bg-rose-300 rounded-full animate-[pulse_0.6s_ease-in-out_infinite_0.1s]" />
-              <span className="w-0.5 h-1.5 bg-rose-500 rounded-full animate-[pulse_0.5s_ease-in-out_infinite_0.2s]" />
-              <span className="w-0.5 h-4 bg-rose-200 rounded-full animate-[pulse_0.7s_ease-in-out_infinite_0.15s]" />
-              <span className="w-0.5 h-2.5 bg-rose-400 rounded-full animate-[pulse_0.45s_ease-in-out_infinite_0.05s]" />
-            </div>
+            {/* Live Web Audio Equalizer Bars */}
+            <LiveFrequencyVisualizer colorClass="bg-rose-400" active={true} />
           </div>
           {!compact && (
             <span className="text-[9px] text-rose-300/80 font-sans hidden sm:inline">
@@ -97,11 +123,7 @@ export const VoiceStatusHUD: React.FC<VoiceStatusHUDProps> = ({
               AI Speaking
             </span>
             {/* Audio Wave Sound Bars */}
-            <div className="flex items-center gap-0.5 h-3">
-              <span className="w-0.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" />
-              <span className="w-0.5 h-3 bg-emerald-300 rounded-full animate-bounce delay-75" />
-              <span className="w-0.5 h-2 bg-emerald-400 rounded-full animate-bounce delay-150" />
-            </div>
+            <LiveFrequencyVisualizer colorClass="bg-emerald-400" active={true} />
           </div>
           {!compact && (
             <span className="text-[9px] text-emerald-300/80 font-sans hidden sm:inline">

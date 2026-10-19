@@ -12,6 +12,7 @@ import {
   X,
   ExternalLink,
   Sparkles,
+  Share2,
 } from 'lucide-react';
 
 export interface ArtifactData {
@@ -94,6 +95,36 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
       newWindow.document.write(html);
       newWindow.document.close();
     }
+  };
+
+  const handleExportCodePen = () => {
+    const currentCode = editableCode || artifact.code;
+    const isSvg = artifact.language.toLowerCase() === 'svg' || currentCode.trim().startsWith('<svg');
+    const isHtmlContent = isSvg || isHtml || currentCode.includes('<html') || currentCode.includes('<!DOCTYPE') || currentCode.includes('<div');
+
+    const payload = {
+      title: artifact.title || 'NexusAI Prototype',
+      description: 'Built with NexusAI Studio — Interactive AI Prototype by Rustam Timalsina',
+      tags: ['nexus-ai', 'react', 'prototype', 'tailwindcss'],
+      html: isHtmlContent ? currentCode : '<div id="app"></div>',
+      js: !isHtmlContent ? currentCode : '',
+      editors: '101',
+    };
+
+    const form = document.createElement('form');
+    form.action = 'https://codepen.io/pen/define';
+    form.method = 'POST';
+    form.target = '_blank';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'data';
+    input.value = JSON.stringify(payload);
+
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
   };
 
   const handleRefresh = () => {
@@ -282,6 +313,14 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
             title="Open preview in standalone browser tab"
           >
             <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={handleExportCodePen}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800/80 transition-colors hidden sm:block"
+            title="Open in CodePen playground"
+          >
+            <Share2 className="w-3.5 h-3.5" />
           </button>
 
           <button

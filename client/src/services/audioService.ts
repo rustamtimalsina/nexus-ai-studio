@@ -16,6 +16,9 @@ class AudioService {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedAudioChunks: Blob[] = [];
   private micStream: MediaStream | null = null;
+  private audioCtx: any = null;
+  private analyser: any = null;
+  private dataArray: Uint8Array | null = null;
 
   // Platform detection
   private isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
@@ -29,9 +32,31 @@ class AudioService {
     return Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   }
 
+  // Real-time audio frequency data for 32-bar visualizer
+  getFrequencyData(): number[] {
+    if (this.analyser && this.dataArray && this.isListening) {
+      this.analyser.getByteFrequencyData(this.dataArray);
+      return Array.from(this.dataArray.slice(0, 16)).map((v: number) => Math.max(0.08, v / 255));
+    }
+    if (this.isSpeaking) {
+      const time = Date.now() * 0.008;
+      return Array.from({ length: 16 }).map((_, i) =>
+        Math.max(0.12, Math.abs(Math.sin(time + i * 0.45) * 0.85))
+      );
+    }
+    if (this.isListening) {
+      const time = Date.now() * 0.006;
+      return Array.from({ length: 16 }).map((_, i) =>
+        Math.max(0.08, Math.abs(Math.sin(time + i * 0.3) * 0.5))
+      );
+    }
+    return Array(16).fill(0.04);
+  }
+
   // Energy level for 3D visualizer
   getAudioLevel(): number {
-    return 0;
+    const freqs = this.getFrequencyData();
+    return freqs.reduce((a, b) => a + b, 0) / freqs.length;
   }
 
   // Start voice recognition

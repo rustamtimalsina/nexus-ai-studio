@@ -147,19 +147,28 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const quickPrompts = [
     {
-      title: 'Quantum Code Synthesizer',
-      desc: 'Build high-performance algorithms and clean TypeScript patterns',
-      prompt: 'Write a high-performance TypeScript service that handles concurrency and cancellation gracefully.',
+      badge: 'Interactive UI',
+      title: 'Neumorphic Audio Player',
+      desc: 'Sleek glassmorphic music player with rotating disc & animated soundbars',
+      prompt: 'Build a standalone single-file HTML & Tailwind CSS interactive Neumorphic Glass Audio Player with rotating album art, working play/pause state, animated equalizer bars, and glowing volume slider.',
     },
     {
-      title: 'Autonomous System Architecture',
-      desc: 'Design fault-tolerant distributed cloud infrastructure',
-      prompt: 'Design a scalable, distributed microservices architecture for real-time streaming data with low latency.',
+      badge: '3D Simulation',
+      title: '3D Solar System Canvas',
+      desc: 'Interactive orbiting Three.js canvas with sun glow and particle field',
+      prompt: 'Generate a self-contained HTML5 & Three.js 3D solar system with orbiting textured planets, an emissive glowing sun, starry background particles, and orbital controls.',
     },
     {
-      title: 'Neural Debugger & Diagnostics',
-      desc: 'Examine stack traces and isolate performance bottlenecks',
-      prompt: 'Help me diagnose and optimize this code for speed, memory efficiency, and zero bugs.',
+      badge: 'Fintech Dashboard',
+      title: 'Crypto Portfolio Matrix',
+      desc: 'Real-time dark crypto dashboard with dynamic SVG price sparkline charts',
+      prompt: 'Generate an interactive HTML/Tailwind CSS Crypto Portfolio Dashboard with real-time style SVG price sparklines, asset distribution progress bars, buy/sell modal toggle, and dark futuristic styling.',
+    },
+    {
+      badge: 'Full-Stack Engine',
+      title: 'Quantum Concurrency Service',
+      desc: 'High-performance TypeScript utility with exponential backoff & abort signal',
+      prompt: 'Write a high-performance TypeScript service that handles concurrency, request pooling, and exponential backoff retry with AbortController cancellation.',
     },
   ];
 
@@ -425,22 +434,29 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 Interact with the 3D entity above with your mouse or voice, or tap a prompt capsule below to begin synthesis.
               </p>
 
-              {/* Quick Prompt Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-left w-full">
+              {/* Quick Prototype Showcase Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-left w-full">
                 {quickPrompts.map((item, i) => (
                   <button
                     key={i}
                     onClick={() => onSelectPromptText(item.prompt)}
-                    className="p-3.5 sm:p-4 rounded-xl bg-slate-900/60 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/50 transition-all text-left group shadow-lg shadow-black/40 hover:shadow-cyan-950/30 active:scale-98"
+                    className="p-3.5 sm:p-4 rounded-xl bg-slate-900/60 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/50 transition-all text-left group shadow-lg shadow-black/40 hover:shadow-cyan-950/30 active:scale-98 flex flex-col justify-between"
                   >
-                    <p className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition-colors mb-1">
-                      {item.title}
-                    </p>
-                    <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                      {item.desc}
-                    </p>
-                    <div className="mt-2.5 flex items-center gap-1 text-[10px] text-cyan-400 font-mono">
-                      <span>Synthesize</span>
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-semibold uppercase tracking-wider">
+                          {item.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition-colors mb-1">
+                        {item.title}
+                      </p>
+                      <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                        {item.desc}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center gap-1 text-[10px] text-cyan-400 font-mono">
+                      <span>Synthesize & Preview</span>
                       <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </button>
