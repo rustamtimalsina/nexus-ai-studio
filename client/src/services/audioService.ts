@@ -183,7 +183,7 @@ class AudioService {
     return true;
   }
 
-  // Stop voice recognition
+  // Stop voice recognition and terminate hardware audio streams
   stopListening(): void {
     this.isListening = false;
     if (this.restartTimer) {
@@ -195,6 +195,16 @@ class AudioService {
         this.recognition.abort();
       } catch {}
       this.recognition = null;
+    }
+    // Hard terminate any active hardware media tracks to guarantee privacy
+    if (this.micStream) {
+      try {
+        this.micStream.getTracks().forEach((track) => {
+          track.stop();
+          track.enabled = false;
+        });
+      } catch {}
+      this.micStream = null;
     }
   }
 

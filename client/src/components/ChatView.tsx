@@ -18,7 +18,7 @@ import {
   Palette,
   Search,
 } from 'lucide-react';
-import { ChatSession, Message, Workspace } from '../types';
+import { ChatSession, Message, Workspace, VoiceState } from '../types';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { AI3DCore, AITheme } from './AI3DCore';
@@ -77,6 +77,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const currentVoiceState: VoiceState = isListening
+    ? 'listening'
+    : isLoading
+    ? 'transcribing'
+    : isSpeaking
+    ? 'speaking'
+    : 'idle';
 
   // Auto-scroll to bottom
   const scrollToBottom = () => {
@@ -322,14 +330,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
           {messages.length === 0 ? (
             /* 3D Interactive Centerpiece */
             <div className="max-w-3xl mx-auto py-6 sm:py-8 px-4 sm:px-6 text-center flex flex-col items-center justify-center min-h-[80%]">
-              {/* Interactive 3D Canvas */}
-              <div className="w-48 h-48 sm:w-80 sm:h-80 relative flex items-center justify-center mb-2">
+              {/* Interactive 3D Canvas with Explicit Voice State Machine HUD */}
+              <div className="w-56 h-56 sm:w-80 sm:h-80 relative flex items-center justify-center mb-4">
                 <AI3DCore
                   isGenerating={isLoading}
                   isListening={isListening}
                   isSpeaking={isSpeaking}
                   isTyping={isTyping}
                   theme={currentTheme}
+                  voiceState={currentVoiceState}
+                  onStopListening={() => setIsListening(false)}
+                  showHUD={true}
                   className="w-full h-full"
                 />
               </div>
@@ -434,18 +445,35 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 isSpeaking={isSpeaking}
                 isTyping={isTyping}
                 theme={currentTheme}
+                voiceState={currentVoiceState}
+                onStopListening={() => setIsListening(false)}
+                showHUD={true}
                 className="w-full h-full"
               />
             </div>
 
-            <div className="w-full p-3 rounded-xl bg-slate-900/90 border border-cyan-500/30 text-xs font-mono space-y-2">
-              <div className="flex justify-between text-[11px]">
-                <span className="text-slate-400">Voice Synthesis:</span>
-                <span className="text-cyan-300">{isSpeaking ? 'Transmitting' : 'Idle'}</span>
+            <div className="w-full p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Voice State:</span>
+                <span
+                  className={`font-semibold uppercase tracking-wider ${
+                    currentVoiceState === 'listening'
+                      ? 'text-rose-400'
+                      : currentVoiceState === 'transcribing'
+                      ? 'text-amber-400'
+                      : currentVoiceState === 'speaking'
+                      ? 'text-emerald-400'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {currentVoiceState === 'idle' ? 'Mic Off • Protected' : currentVoiceState}
+                </span>
               </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-slate-400">Audio Reactive:</span>
-                <span className="text-emerald-400">{isListening ? 'Receiving Voice' : 'Ready'}</span>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Hardware Status:</span>
+                <span className={isListening ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                  {isListening ? 'Capture Active' : 'Cleanly Terminated'}
+                </span>
               </div>
             </div>
           </div>
@@ -462,6 +490,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         onStopGenerating={onStopGenerating}
         onListeningChange={setIsListening}
         onTypingChange={setIsTyping}
+        voiceState={currentVoiceState}
       />
     </div>
   );

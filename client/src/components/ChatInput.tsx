@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff, Square } from 'lucide-react';
+import { Send, BookOpen, ChevronDown, Sparkles, Mic, MicOff, Square, ShieldCheck } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { soundService } from '../services/soundService';
+import { VoiceState } from '../types';
+import { VoiceStatusHUD } from './VoiceStatusHUD';
 
 interface ChatInputProps {
   onSendMessage: (content: string, model: string) => void;
@@ -12,6 +14,7 @@ interface ChatInputProps {
   onStopGenerating?: () => void;
   onListeningChange?: (isListening: boolean) => void;
   onTypingChange?: (isTyping: boolean) => void;
+  voiceState?: VoiceState;
 }
 
 const AVAILABLE_MODELS = [
@@ -29,6 +32,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onStopGenerating,
   onListeningChange,
   onTypingChange,
+  voiceState,
 }) => {
   const [input, setInput] = useState('');
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -159,19 +163,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         {/* Live Active Voice Listening Indicator */}
         {isListening && (
-          <div className="mb-2 px-3 py-1.5 rounded-lg bg-cyan-950/70 border border-cyan-500/50 text-cyan-300 text-xs flex items-center justify-between shadow-lg animate-pulse">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-              <span className="font-semibold text-white">Listening to your voice...</span>
-              <span className="hidden sm:inline text-cyan-400/80">Speak naturally</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleToggleMic}
-              className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/30"
-            >
-              Done / Stop
-            </button>
+          <div className="mb-2.5 flex justify-center animate-in slide-in-from-bottom-2 duration-150">
+            <VoiceStatusHUD
+              voiceState="listening"
+              onStopListening={handleToggleMic}
+            />
           </div>
         )}
 
@@ -231,8 +227,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </button>
           </div>
 
-          <div className="hidden sm:block text-[11px] text-slate-500 font-mono">
-            Shift + Enter for new line
+          <div className="flex items-center gap-2">
+            <VoiceStatusHUD
+              voiceState={
+                isListening
+                  ? 'listening'
+                  : isLoading
+                  ? 'transcribing'
+                  : voiceState || 'idle'
+              }
+              compact
+            />
+            <div className="hidden sm:block text-[11px] text-slate-500 font-mono">
+              Shift + Enter for new line
+            </div>
           </div>
         </div>
 
@@ -241,7 +249,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onSubmit={handleSubmit}
           className={`relative flex items-end rounded-xl border bg-slate-950/80 shadow-2xl transition-all ${
             isListening
-              ? 'border-cyan-400 ring-2 ring-cyan-500/30'
+              ? 'border-rose-500/80 ring-2 ring-rose-500/30'
               : 'border-cyan-500/30 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/40'
           }`}
         >
@@ -261,19 +269,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           />
 
           <div className="p-1.5 sm:p-2 flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Microphone Voice Button */}
+            {/* Microphone Voice Button with Persistent Mic Status */}
             <button
               type="button"
               onClick={handleToggleMic}
               disabled={isLoading}
-              className={`flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg transition-all shadow-md ${
+              className={`relative flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg transition-all shadow-md ${
                 isListening
-                  ? 'bg-fuchsia-600 text-white animate-pulse shadow-fuchsia-900/50 ring-2 ring-fuchsia-400'
+                  ? 'bg-rose-600 text-white animate-pulse shadow-rose-900/60 ring-2 ring-rose-400'
                   : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-cyan-400 active:scale-95'
               }`}
-              title={isListening ? 'Stop voice recording' : 'Speak with your microphone'}
+              title={
+                isListening
+                  ? 'Stop voice recording'
+                  : 'Speak with your microphone (Mic is currently inactive & muted)'
+              }
             >
-              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              {isListening ? (
+                <Mic className="w-4 h-4 text-white animate-bounce" />
+              ) : (
+                <Mic className="w-4 h-4 text-slate-300" />
+              )}
+              {!isListening && (
+                <span
+                  className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center"
+                  title="Mic is cleanly terminated"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                </span>
+              )}
             </button>
 
             {/* Submit / Stop Button */}

@@ -1,5 +1,7 @@
 export type Role = 'user' | 'assistant' | 'system';
 
+export type VoiceState = 'idle' | 'listening' | 'transcribing' | 'speaking';
+
 export interface Message {
   id: string;
   chatId: string;

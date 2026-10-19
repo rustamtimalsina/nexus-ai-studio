@@ -1,6 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { audioService } from '../services/audioService';
+import { VoiceState } from '../types';
+import { VoiceStatusHUD } from './VoiceStatusHUD';
 
 export type AITheme = 'quantum' | 'cyber' | 'solar';
 
@@ -10,6 +12,9 @@ interface AI3DCoreProps {
   isListening?: boolean;
   isSpeaking?: boolean;
   theme?: AITheme;
+  voiceState?: VoiceState;
+  onStopListening?: () => void;
+  showHUD?: boolean;
   className?: string;
 }
 
@@ -19,11 +24,32 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
   isListening,
   isSpeaking,
   theme = 'quantum',
+  voiceState,
+  onStopListening,
+  showHUD = true,
   className = '',
 }) => {
+  const effectiveVoiceState: VoiceState =
+    voiceState ||
+    (isListening ? 'listening' : isGenerating ? 'transcribing' : isSpeaking ? 'speaking' : 'idle');
+
   const mountRef = useRef<HTMLDivElement>(null);
-  const stateRef = useRef({ isGenerating, isTyping, isListening, isSpeaking, theme });
-  stateRef.current = { isGenerating, isTyping, isListening, isSpeaking, theme };
+  const stateRef = useRef({
+    isGenerating,
+    isTyping,
+    isListening,
+    isSpeaking,
+    theme,
+    voiceState: effectiveVoiceState,
+  });
+  stateRef.current = {
+    isGenerating,
+    isTyping,
+    isListening,
+    isSpeaking,
+    theme,
+    voiceState: effectiveVoiceState,
+  };
 
   useEffect(() => {
     const container = mountRef.current;
@@ -232,6 +258,7 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
         isTyping: activeTyping,
         isListening: activeListening,
         isSpeaking: activeSpeaking,
+        voiceState: currentVoiceState,
       } = stateRef.current;
 
       // Real-time audio reactive level
@@ -241,6 +268,21 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
         if (audioLevel === 0) {
           audioLevel = (Math.sin(elapsedTime * 8) + 1) * 0.25;
         }
+      }
+
+      // Voice State dynamic emissive response
+      if (currentVoiceState === 'listening') {
+        sphereMat.emissive.setHex(0xe11d48); // Glowing Rose/Red when listening
+        sphereMat.emissiveIntensity = 0.9;
+      } else if (currentVoiceState === 'transcribing') {
+        sphereMat.emissive.setHex(0xd97706); // Warm Amber when transcribing/reasoning
+        sphereMat.emissiveIntensity = 0.8;
+      } else if (currentVoiceState === 'speaking') {
+        sphereMat.emissive.setHex(0x059669); // Emerald pulse when speaking
+        sphereMat.emissiveIntensity = 0.85;
+      } else {
+        sphereMat.emissive.setHex(themeConfig.sphereEmissive);
+        sphereMat.emissiveIntensity = 0.6;
       }
 
       // Parallax mouse damping
@@ -314,9 +356,16 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
   }, [theme]);
 
   return (
-    <div
-      ref={mountRef}
-      className={`relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none ${className}`}
-    />
+    <div className={`relative flex flex-col items-center justify-center select-none ${className}`}>
+      <div
+        ref={mountRef}
+        className="w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
+      />
+      {showHUD && (
+        <div className="mt-2 shrink-0 z-10 pointer-events-auto">
+          <VoiceStatusHUD voiceState={effectiveVoiceState} onStopListening={onStopListening} />
+        </div>
+      )}
+    </div>
   );
 };
