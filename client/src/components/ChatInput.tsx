@@ -18,9 +18,11 @@ interface ChatInputProps {
 }
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', badge: 'Active Neural' },
-  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Lite', badge: 'Ultra Fast' },
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Deep Reasoning' },
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', badge: 'Fast & Vision', desc: 'Recommended default for chat & vision' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Lite', badge: 'Ultra Fast', desc: 'Sub-second conversational response' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Deep Reasoning', desc: 'Advanced code & architectural logic' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', badge: 'Stable Core', desc: 'High reliability production model' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', badge: 'Architect', desc: 'Complex reasoning & system design' },
 ];
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -245,24 +247,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
               {modelDropdownOpen && (
                 <div className="absolute bottom-full mb-1 left-0 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-30 py-1">
-                  <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
-                    Select Model
+                  <div className="px-3 py-1.5 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 flex items-center justify-between">
+                    <span>Neural Model Engine</span>
+                    <span className="text-cyan-400 font-sans">Multi-Fallback</span>
                   </div>
                   {AVAILABLE_MODELS.map((model) => (
                     <button
                       key={model.id}
                       onClick={() => {
                         onSelectModel(model.id);
+                        try {
+                          localStorage.setItem('nexus_selected_model', model.id);
+                        } catch {}
                         setModelDropdownOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-800 transition-colors ${
-                        selectedModel === model.id ? 'bg-slate-800/80 text-cyan-400' : 'text-slate-300'
+                      className={`w-full flex flex-col gap-0.5 px-3 py-2 text-xs text-left hover:bg-slate-800/80 transition-colors border-b border-slate-800/40 last:border-b-0 ${
+                        selectedModel === model.id ? 'bg-cyan-950/40 text-cyan-300' : 'text-slate-300'
                       }`}
                     >
-                      <span className="font-medium">{model.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                        {model.badge}
-                      </span>
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-semibold text-white">{model.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-mono">
+                          {model.badge}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 line-clamp-1">{model.desc}</span>
                     </button>
                   ))}
                 </div>

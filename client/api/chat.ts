@@ -24,6 +24,7 @@ export default async function handler(req: any, res: any) {
 
   const content = body?.content || '';
   const attachment = body?.attachment;
+  const requestedModel = body?.model;
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -31,9 +32,12 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const candidateModels = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+    const defaultCandidates = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+    const candidateModels = requestedModel
+      ? [requestedModel, ...defaultCandidates.filter((m) => m !== requestedModel)]
+      : defaultCandidates;
     let geminiRes: any = null;
-    let usedModel = 'gemini-3.5-flash';
+    let usedModel = candidateModels[0];
 
     const systemInstruction =
       'You are NexusAI Studio, an interactive, smart, and friendly AI assistant created and engineered by Rustam Timalsina. Always answer naturally, intelligently, and helpfully. If analyzing an image or screenshot, describe it thoroughly and if requested, generate clean runnable HTML/Tailwind/React code so the user can preview it in the live Artifact Canvas.';

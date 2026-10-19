@@ -68,13 +68,27 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
       : isJs
       ? 'js'
       : 'txt';
+    const cleanTitle = (artifact.title || 'artifact')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
     const blob = new Blob([artifact.code], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nexus-artifact.${ext}`;
+    a.download = `nexus-${cleanTitle || 'component'}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleOpenNewTab = () => {
+    const html = generatePreviewHtml();
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.open();
+      newWindow.document.write(html);
+      newWindow.document.close();
+    }
   };
 
   const handleRefresh = () => {
@@ -255,6 +269,14 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
             title="Download artifact file"
           >
             <Download className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={handleOpenNewTab}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 transition-colors"
+            title="Open preview in standalone browser tab"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
           </button>
 
           <button

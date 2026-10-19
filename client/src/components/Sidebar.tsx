@@ -26,6 +26,7 @@ interface SidebarProps {
   onOpenWorkspaceModal: () => void;
   onOpenPromptLibrary: () => void;
   onOpenSettings: () => void;
+  onClearAllChats?: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
@@ -42,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenWorkspaceModal,
   onOpenPromptLibrary,
   onOpenSettings,
+  onClearAllChats,
   isMobileOpen = false,
   onCloseMobile,
 }) => {
@@ -185,8 +187,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Chat Sessions History List */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-        <div className="px-2 pb-1 text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider">
-          Sessions ({filteredChats.length})
+        <div className="px-2 pb-1 text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider flex items-center justify-between">
+          <span>Sessions ({filteredChats.length})</span>
+          {chats.length > 0 && onClearAllChats && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm('Are you sure you want to clear all chat sessions?')) {
+                  onClearAllChats();
+                }
+              }}
+              className="text-[10px] text-slate-500 hover:text-red-400 font-mono lowercase transition-colors px-1 py-0.5 rounded hover:bg-slate-800"
+              title="Clear all chat history"
+            >
+              clear all
+            </button>
+          )}
         </div>
 
         {filteredChats.length === 0 ? (

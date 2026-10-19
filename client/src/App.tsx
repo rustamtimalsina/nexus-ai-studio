@@ -80,7 +80,9 @@ export const App: React.FC = () => {
         const initialChats = await api.getChats();
         setChats(initialChats);
         if (initialChats.length > 0) {
-          setActiveChatId(initialChats[0].id);
+          const savedActiveId = localStorage.getItem('nexus_active_chat_id');
+          const found = initialChats.find((c) => c.id === savedActiveId);
+          setActiveChatId(found ? found.id : initialChats[0].id);
         }
       } catch (err) {
         console.error('Initialization error:', err);
@@ -89,12 +91,16 @@ export const App: React.FC = () => {
     initialize();
   }, []);
 
-  // When activeChatId changes, fetch messages
+  // When activeChatId changes, fetch messages and persist active ID
   useEffect(() => {
     if (!activeChatId) {
       setMessages([]);
       return;
     }
+    try {
+      localStorage.setItem('nexus_active_chat_id', activeChatId);
+    } catch {}
+
     const loadMessages = async () => {
       try {
         const data = await api.getMessages(activeChatId);
@@ -213,6 +219,22 @@ export const App: React.FC = () => {
       soundService.playClick();
     } catch (err) {
       console.error('Failed to delete chat:', err);
+    }
+  };
+
+  // Handle clear all chats
+  const handleClearAllChats = async () => {
+    try {
+      for (const chat of chats) {
+        await api.deleteChat(chat.id);
+      }
+      setChats([]);
+      setActiveChatId(null);
+      setMessages([]);
+      localStorage.removeItem('nexus_active_chat_id');
+      soundService.playClick();
+    } catch (err) {
+      console.error('Failed to clear chats:', err);
     }
   };
 
@@ -357,6 +379,7 @@ export const App: React.FC = () => {
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
         onOpenPromptLibrary={() => setIsPromptLibraryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onClearAllChats={handleClearAllChats}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
