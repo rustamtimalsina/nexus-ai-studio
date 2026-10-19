@@ -18,6 +18,7 @@ import {
   Palette,
   Search,
   Radio,
+  Play,
 } from 'lucide-react';
 import { ChatSession, Message, Workspace, VoiceState, MessageAttachment } from '../types';
 import { ChatMessage } from './ChatMessage';
@@ -129,6 +130,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setTitleDraft(chat.title);
     }
   }, [chat]);
+
+  const lastRunnableMsg = messages.slice().reverse().find((m) => {
+    return (
+      m.role === 'assistant' &&
+      (m.content.includes('```html') ||
+        m.content.includes('```js') ||
+        m.content.includes('```javascript') ||
+        m.content.includes('```typescript') ||
+        m.content.includes('```ts') ||
+        m.content.includes('```svg') ||
+        m.content.includes('<!DOCTYPE') ||
+        m.content.includes('<html') ||
+        m.content.includes('<svg'))
+    );
+  });
 
   const handleSaveTitle = () => {
     if (chat && titleDraft.trim() && onRenameChat) {
@@ -278,6 +294,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
             >
               <Palette className="w-3.5 h-3.5 shrink-0" />
               <span className="hidden md:inline font-mono text-[11px] capitalize">{currentTheme}</span>
+            </button>
+          )}
+
+          {/* Live Sandbox Quick Launcher */}
+          {lastRunnableMsg && onOpenArtifact && (
+            <button
+              onClick={() => {
+                soundService.playClick();
+                const codeMatch = lastRunnableMsg.content.match(
+                  /```(html|js|javascript|typescript|ts|svg|css)?\s*([\s\S]*?)```/i
+                );
+                const lang = (codeMatch?.[1] || 'html').toLowerCase();
+                const code = codeMatch?.[2]?.trim() || lastRunnableMsg.content;
+                onOpenArtifact({
+                  title: `${lang.toUpperCase()} Sandbox`,
+                  language: lang || 'html',
+                  code,
+                });
+              }}
+              className="flex items-center gap-1.5 text-xs px-2 sm:px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-500/25 to-cyan-500/25 hover:from-emerald-500/35 hover:to-cyan-500/35 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/50 transition-all active:scale-95 animate-pulse"
+              title="Open the active prototype in Live Sandbox"
+            >
+              <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
+              <span className="font-semibold text-[11px]">Live Sandbox</span>
             </button>
           )}
 

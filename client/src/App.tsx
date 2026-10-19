@@ -285,6 +285,25 @@ export const App: React.FC = () => {
         setStreamingContent('');
         abortControllerRef.current = null;
         soundService.playComplete();
+
+        // Auto-open Artifact Canvas when runnable code is generated
+        const codeMatch = fullAssistantMsg.content.match(/```(html|js|javascript|typescript|ts|svg|css)?\s*([\s\S]*?)```/i);
+        if (codeMatch && codeMatch[2]) {
+          const lang = (codeMatch[1] || 'html').toLowerCase();
+          const code = codeMatch[2].trim();
+          if (
+            ['html', 'js', 'javascript', 'typescript', 'ts', 'svg'].includes(lang) ||
+            code.includes('<html') ||
+            code.includes('<div') ||
+            code.includes('<svg')
+          ) {
+            setActiveArtifact({
+              title: `${lang.toUpperCase()} Live Prototype`,
+              language: lang || 'html',
+              code,
+            });
+          }
+        }
       },
       (error) => {
         if (!controller.signal.aborted) {
