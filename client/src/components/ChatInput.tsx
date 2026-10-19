@@ -161,16 +161,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
 
-        {/* Live Active Voice Listening Indicator */}
-        {isListening && (
-          <div className="mb-2.5 flex justify-center animate-in slide-in-from-bottom-2 duration-150">
-            <VoiceStatusHUD
-              voiceState="listening"
-              onStopListening={handleToggleMic}
-            />
-          </div>
-        )}
-
         {/* Quick Toolbar above input */}
         <div className="flex items-center justify-between mb-2 px-1 text-xs text-slate-400">
           <div className="flex items-center gap-2">

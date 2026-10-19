@@ -156,19 +156,14 @@ Here is my perspective based on the current workspace context (\`${systemPrompt 
     res: Response
   ) {
     // Resolve model to currently active Gemini versions
-    let formattedModel = model;
-    if (
-      !formattedModel ||
-      formattedModel.includes('1.5') ||
-      formattedModel.includes('2.0') ||
-      formattedModel.includes('2.5') ||
-      formattedModel === 'gpt-4o' ||
-      formattedModel === 'claude-3-5-sonnet'
-    ) {
-      formattedModel = 'gemini-3.8-flash';
-    }
+    const candidateModels = [
+      model === 'gemini-3.5-flash' || model === 'gemini-3.5-flash-lite' ? model : 'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
+    ].filter((m, i, arr) => arr.indexOf(m) === i);
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${formattedModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    let response: any = null;
+    let successfulModel = 'gemini-3.5-flash';
 
     const contents = messages
       .filter((m) => m.role !== 'system')
@@ -177,25 +172,32 @@ Here is my perspective based on the current workspace context (\`${systemPrompt 
         parts: [{ text: m.content }],
       }));
 
-    const body: any = {
-      contents,
-    };
-
+    const body: any = { contents };
     if (systemPrompt) {
       body.systemInstruction = {
         parts: [{ text: systemPrompt }],
       };
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    for (const targetModel of candidateModels) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
+      try {
+        const attempt = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+        if (attempt.ok) {
+          response = attempt;
+          successfulModel = targetModel;
+          break;
+        }
+      } catch {}
+    }
+
+    if (!response || !response.ok) {
+      throw new Error(`Gemini API error: Models reached quota or are unavailable.`);
     }
 
     const reader = response.body?.getReader();
@@ -252,7 +254,7 @@ Here is my perspective based on the current workspace context (\`${systemPrompt 
     }
 
     const tokens = Math.ceil(accumulatedText.length / 4);
-    res.write(`data: ${JSON.stringify({ done: true, fullText: accumulatedText, tokens, model: formattedModel })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true, fullText: accumulatedText, tokens, model: successfulModel })}\n\n`);
     res.end();
   }
 }

@@ -141,7 +141,7 @@ export const api = {
         id: 'chat-welcome',
         title: 'Welcome to Nexus 3D Studio',
         workspaceId: 'ws-general',
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.5-flash',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         messageCount: 1,
@@ -155,7 +155,7 @@ export const api = {
       id: `chat-${Date.now()}`,
       title: data.title || 'New Chat',
       workspaceId: data.workspaceId,
-      model: data.model || 'gemini-3.8-flash',
+      model: data.model || 'gemini-3.5-flash',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       messageCount: 0,
@@ -484,7 +484,7 @@ export const api = {
     }
     return getLocal<AppSettings & { rawApiKey?: string }>('settings', {
       provider: 'gemini',
-      defaultModel: 'gemini-3.8-flash',
+      defaultModel: 'gemini-3.5-flash',
       temperature: 0.7,
       maxTokens: 2048,
       hasApiKey: Boolean(getLocal<string>('rawApiKey', '')),
