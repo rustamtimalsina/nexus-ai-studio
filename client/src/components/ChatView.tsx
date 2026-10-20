@@ -131,9 +131,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   }, [chat]);
 
-  const lastRunnableMsg = messages.slice().reverse().find((m) => {
+  const lastRunnableMsg = (messages || []).slice().reverse().find((m) => {
     return (
+      m &&
       m.role === 'assistant' &&
+      m.content &&
+      typeof m.content === 'string' &&
       (m.content.includes('```html') ||
         m.content.includes('```js') ||
         m.content.includes('```javascript') ||
@@ -433,7 +436,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       <div className="flex-1 flex overflow-hidden relative">
         {/* Chat Thread */}
         <div className="flex-1 overflow-y-auto">
-          {(!messages.some((m) => m.role === 'user') && !isLoading) ? (
+          {(!(messages || []).some((m) => m && m.role === 'user') && !isLoading) ? (
             /* 3D Interactive Centerpiece */
             <div className="max-w-3xl mx-auto py-6 sm:py-8 px-4 sm:px-6 text-center flex flex-col items-center justify-center min-h-[80%]">
               {/* Interactive 3D Canvas with Explicit Voice State Machine HUD */}

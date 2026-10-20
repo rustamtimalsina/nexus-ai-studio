@@ -45,19 +45,22 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
 
   if (!artifact) return null;
 
+  const currentCode = editableCode || artifact.code || '';
+  const langLower = (artifact.language || 'html').toLowerCase();
+
   const isHtml =
-    artifact.language.toLowerCase() === 'html' ||
-    artifact.code.includes('<!DOCTYPE html>') ||
-    artifact.code.includes('<html') ||
-    artifact.code.includes('<div') ||
-    artifact.code.includes('<svg') ||
-    artifact.language.toLowerCase() === 'svg';
+    langLower === 'html' ||
+    currentCode.includes('<!DOCTYPE html>') ||
+    currentCode.includes('<html') ||
+    currentCode.includes('<div') ||
+    currentCode.includes('<svg') ||
+    langLower === 'svg';
 
   const isJs =
-    artifact.language.toLowerCase() === 'javascript' ||
-    artifact.language.toLowerCase() === 'js' ||
-    artifact.language.toLowerCase() === 'typescript' ||
-    artifact.language.toLowerCase() === 'ts';
+    langLower === 'javascript' ||
+    langLower === 'js' ||
+    langLower === 'typescript' ||
+    langLower === 'ts';
 
   const handleCopy = () => {
     navigator.clipboard.writeText(editableCode || artifact.code);
@@ -99,7 +102,7 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
 
   const handleExportCodePen = () => {
     const currentCode = editableCode || artifact.code;
-    const isSvg = artifact.language.toLowerCase() === 'svg' || currentCode.trim().startsWith('<svg');
+    const isSvg = langLower === 'svg' || currentCode.trim().startsWith('<svg');
     const isHtmlContent = isSvg || isHtml || currentCode.includes('<html') || currentCode.includes('<!DOCTYPE') || currentCode.includes('<div');
 
     const payload = {
@@ -134,10 +137,10 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
 
   // Generate safe sandboxed HTML payload with console listener
   const generatePreviewHtml = () => {
-    let rawCode = editableCode || artifact.code;
+    let rawCode = editableCode || artifact.code || '';
 
     // If bare SVG, wrap it nicely in centered dark backdrop
-    if (artifact.language.toLowerCase() === 'svg' || (rawCode.trim().startsWith('<svg') && rawCode.trim().endsWith('</svg>'))) {
+    if (langLower === 'svg' || (rawCode.trim().startsWith('<svg') && rawCode.trim().endsWith('</svg>'))) {
       return `
         <!DOCTYPE html>
         <html>
@@ -529,7 +532,7 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           Sandboxed HTML5 Engine
         </span>
-        <span>{artifact.code.length.toLocaleString()} characters</span>
+        <span>{(artifact?.code || '').length.toLocaleString()} characters</span>
       </div>
     </div>
   );
