@@ -177,10 +177,45 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
       `;
     }
 
-    // Inject console log interceptor
+    // Detect and auto-inject essential libraries if missing
+    let autoInjectedHead = '';
+
+    // Auto-inject Tailwind CSS if Tailwind classes are used and script is absent
+    if (!rawCode.includes('tailwindcss.com') && (rawCode.includes('class="') || rawCode.includes("class='"))) {
+      autoInjectedHead += '<script src="https://cdn.tailwindcss.com"></script>\n';
+    }
+
+    // Auto-inject Three.js and OrbitControls if referenced and not loaded
+    const mentionsThree = rawCode.includes('THREE.') || rawCode.toLowerCase().includes('three.js');
+    const hasThreeScript = rawCode.includes('three.min.js') || rawCode.includes('three.module.js') || rawCode.includes('three.js');
+    if (mentionsThree && !hasThreeScript) {
+      autoInjectedHead += `
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+      `;
+    }
+
+    // Robust console and error interceptor with on-screen error banner
     const consoleInterceptor = `
       <script>
         (function() {
+          // Safe localStorage mock in sandboxed iframe
+          try {
+            var _test = window.localStorage;
+          } catch(e) {
+            var _store = {};
+            try {
+              Object.defineProperty(window, 'localStorage', {
+                value: {
+                  getItem: function(k) { return _store[k] || null; },
+                  setItem: function(k, v) { _store[k] = String(v); },
+                  removeItem: function(k) { delete _store[k]; },
+                  clear: function() { _store = {}; }
+                }
+              });
+            } catch(e2) {}
+          }
+
           var oldLog = console.log;
           var oldError = console.error;
           var oldWarn = console.warn;
@@ -195,14 +230,52 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
           console.log = function() { sendLog('log', arguments); oldLog.apply(console, arguments); };
           console.error = function() { sendLog('error', arguments); oldError.apply(console, arguments); };
           console.warn = function() { sendLog('warn', arguments); oldWarn.apply(console, arguments); };
+
+          window.onerror = function(msg, url, line, col, err) {
+            var fullErr = 'Error: ' + msg + (line ? ' (line ' + line + ')' : '');
+            sendLog('error', [fullErr]);
+            var banner = document.getElementById('nexus-error-banner');
+            if (!banner && document.body) {
+              banner = document.createElement('div');
+              banner.id = 'nexus-error-banner';
+              banner.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;background:rgba(153,27,27,0.95);color:#fecaca;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:11px;z-index:999999;border:1px solid #ef4444;box-shadow:0 8px 24px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:space-between;';
+              banner.innerHTML = '<span>⚠️ ' + fullErr + '</span><button onclick="this.parentElement.remove()" style="background:#ef4444;color:white;border:none;padding:2px 8px;border-radius:4px;cursor:pointer;">✕</button>';
+              document.body.appendChild(banner);
+            }
+          };
+
+          window.addEventListener('unhandledrejection', function(e) {
+            var reason = e.reason ? (e.reason.message || String(e.reason)) : 'Unhandled Promise Rejection';
+            if (window.onerror) window.onerror(reason, '', 0);
+          });
         })();
       </script>
     `;
 
+    // Ensure full HTML shell if snippet is bare HTML tags
+    if (!rawCode.includes('<html') && !rawCode.includes('<!DOCTYPE')) {
+      rawCode = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; min-height: 100vh; background: #070c14; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; overflow-x: hidden; }
+          </style>
+          ${autoInjectedHead}
+        </head>
+        <body>
+          ${rawCode}
+        </body>
+        </html>
+      `;
+    }
+
     if (rawCode.includes('<head>')) {
-      return rawCode.replace('<head>', `<head>${consoleInterceptor}`);
+      return rawCode.replace('<head>', `<head>${consoleInterceptor}\n${autoInjectedHead}`);
     } else {
-      return `${consoleInterceptor}${rawCode}`;
+      return `${consoleInterceptor}\n${autoInjectedHead}${rawCode}`;
     }
   };
 
@@ -352,7 +425,7 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
               srcDoc={generatePreviewHtml()}
               title="Artifact Sandbox"
               sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
-              className="w-full h-full border-none bg-white/5"
+              className="w-full h-full border-none bg-transparent"
             />
           </div>
         )}
