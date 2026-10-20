@@ -204,16 +204,7 @@ export const api = {
       return remote;
     }
 
-    return getLocal<Message[]>(`messages_${chatId}`, [
-      {
-        id: 'msg-welcome',
-        chatId: 'chat-welcome',
-        role: 'assistant',
-        content: 'Welcome to **Nexus 3D Intelligence Studio**! 🚀\n\nI am your interactive, voice-reactive AI assistant. You can:\n- 🎙️ Click the **Mic** button to speak with voice.\n- 💬 Type any question in the prompt box.\n- ⚙️ Add your Google Gemini API key in **Settings & API** for live neural answers!',
-        timestamp: new Date().toISOString(),
-        model: 'gemini-3.8-flash',
-      },
-    ]);
+    return getLocal<Message[]>(`messages_${chatId}`, []);
   },
 
   // Stream message (Backend Proxy OR Direct Gemini API OR Client Simulator)
