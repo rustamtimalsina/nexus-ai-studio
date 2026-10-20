@@ -43,6 +43,16 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
     }
   }, [artifact]);
 
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'nexus_console') {
+        setLogs((prev) => [...prev, `[${e.data.logType.toUpperCase()}] ${e.data.message}`]);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   if (!artifact) return null;
 
   const currentCode = editableCode || artifact.code || '';
@@ -281,16 +291,6 @@ export const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({ artifact, onClos
       return `${consoleInterceptor}\n${autoInjectedHead}${rawCode}`;
     }
   };
-
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data && e.data.type === 'nexus_console') {
-        setLogs((prev) => [...prev, `[${e.data.logType.toUpperCase()}] ${e.data.message}`]);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
 
   return (
     <div
