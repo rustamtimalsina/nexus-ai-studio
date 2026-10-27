@@ -246,13 +246,13 @@ export const AI3DCore: React.FC<AI3DCoreProps> = ({
     };
     window.addEventListener('resize', handleResize);
 
-    // Animation Loop
-    const clock = new THREE.Clock();
+    // Animation Loop (uses performance.now for modern Three.js compatibility)
+    const startTime = performance.now();
     let animationFrameId: number;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
-      const elapsedTime = clock.getElapsedTime();
+      const elapsedTime = (performance.now() - startTime) * 0.001;
       const {
         isGenerating: activeGenerating,
         isTyping: activeTyping,

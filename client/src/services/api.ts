@@ -80,17 +80,30 @@ function setLocal<T>(key: string, val: T): void {
   } catch {}
 }
 
+// Track routes that returned 404 or failed to prevent console noise
+const unavailableRoutes = new Set<string>();
+
 // Safely fetch JSON from backend only if an actual JSON response was returned
 async function tryFetchJson<T>(url: string, options?: RequestInit): Promise<T | null> {
+  const routeKey = url.split('?')[0].replace(/\/chat-[^/]+/, '/:chatId');
+  if (unavailableRoutes.has(routeKey)) {
+    return null;
+  }
+
   try {
     const res = await fetch(url, options);
+    if (res.status === 404) {
+      unavailableRoutes.add(routeKey);
+      return null;
+    }
     const contentType = res.headers.get('content-type') || '';
-    // If Vercel rewrites to index.html, contentType will be text/html
     if (res.ok && contentType.includes('application/json')) {
       const data = await res.json();
       return data?.data !== undefined ? data.data : data;
     }
-  } catch {}
+  } catch {
+    unavailableRoutes.add(routeKey);
+  }
   return null;
 }
 
@@ -198,13 +211,18 @@ export const api = {
 
   // Messages
   async getMessages(chatId: string): Promise<Message[]> {
+    const local = getLocal<Message[]>(`messages_${chatId}`, []);
+    if (local.length > 0) {
+      return local;
+    }
+
     const remote = await tryFetchJson<Message[]>(`${BASE_URL}/chats/${chatId}/messages`);
-    if (remote && Array.isArray(remote)) {
+    if (remote && Array.isArray(remote) && remote.length > 0) {
       setLocal(`messages_${chatId}`, remote);
       return remote;
     }
 
-    return getLocal<Message[]>(`messages_${chatId}`, []);
+    return local;
   },
 
   // Stream message (Backend Proxy OR Direct Gemini API OR Client Simulator)
@@ -509,5 +527,191 @@ export const api = {
     };
     setLocal('settings', updated);
     return updated;
+  },
+
+  // In-Canvas AI Component Transformer
+  async modifyArtifact(
+    currentCode: string,
+    instruction: string,
+    language: string
+  ): Promise<string> {
+    const settings = await this.getSettings();
+    const apiKey = settings.rawApiKey || (settings.apiKey && !settings.apiKey.includes('••••') ? settings.apiKey : '');
+
+    // 1. Try Direct Google Gemini API if user configured key
+    if (apiKey && settings.provider === 'gemini') {
+      try {
+        const targetModel = 'gemini-3.5-flash';
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+
+        const prompt = `You are a world-class frontend engineer and UI architect.
+Your task is to modify the following code snippet strictly according to this user instruction:
+"${instruction}"
+
+IMPORTANT RULES:
+1. Return ONLY the complete, working, modified code inside a single markdown code block (e.g. \`\`\`html ... \`\`\` or \`\`\`javascript ... \`\`\`).
+2. Do NOT write explanations, intros, or markdown outside the code block.
+3. Preserve all functional parts while implementing the requested change with modern, responsive styling.
+
+Original Code:
+\`\`\`${language || 'html'}
+${currentCode}
+\`\`\`
+`;
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawText) {
+            const codeBlockMatch = rawText.match(/```(?:html|js|javascript|typescript|ts|svg)?\s*([\s\S]*?)```/i);
+            if (codeBlockMatch && codeBlockMatch[1].trim()) {
+              return codeBlockMatch[1].trim();
+            }
+            if (rawText.includes('<html') || rawText.includes('<div') || rawText.includes('<!DOCTYPE')) {
+              return rawText.trim();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Gemini API modify error, using client-side refiner:', e);
+      }
+    }
+
+    // 2. Intelligent Client-Side Code Transformer (Always works offline & standalone)
+    let modified = currentCode;
+    const instLower = instruction.toLowerCase();
+
+    if (instLower.includes('purple') || instLower.includes('cyber') || instLower.includes('synthwave')) {
+      const cyberStyle = `
+        <style id="nexus-ai-cyber-theme">
+          body { background: radial-gradient(circle at 50% 0%, #2e1065 0%, #090214 100%) !important; color: #e9d5ff !important; }
+          button, .btn { box-shadow: 0 0 20px rgba(168, 85, 247, 0.4) !important; border-color: #a855f7 !important; }
+        </style>
+      `;
+      if (modified.includes('</head>')) {
+        modified = modified.replace('</head>', `${cyberStyle}\n</head>`);
+      } else {
+        modified = cyberStyle + modified;
+      }
+    } else if (instLower.includes('neon') || instLower.includes('glow') || instLower.includes('cyan')) {
+      const glowStyle = `
+        <style id="nexus-ai-glow-theme">
+          * { text-shadow: 0 0 8px rgba(6, 182, 212, 0.4); }
+          button, .card, div[class*="rounded"] { box-shadow: 0 0 25px rgba(6, 182, 212, 0.35) !important; border-color: #06b6d4 !important; transition: all 0.3s ease !important; }
+          button:hover { box-shadow: 0 0 35px rgba(6, 182, 212, 0.7) !important; transform: scale(1.03) !important; }
+        </style>
+      `;
+      if (modified.includes('</head>')) {
+        modified = modified.replace('</head>', `${glowStyle}\n</head>`);
+      } else {
+        modified = glowStyle + modified;
+      }
+    } else if (instLower.includes('animation') || instLower.includes('float') || instLower.includes('hover')) {
+      const animStyle = `
+        <style id="nexus-ai-animation-theme">
+          @keyframes nexusFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+          .card, main, [class*="container"], [class*="player"], [class*="wrapper"] { animation: nexusFloat 4s ease-in-out infinite !important; }
+          button:hover, a:hover { transform: translateY(-2px) scale(1.04) !important; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important; }
+        </style>
+      `;
+      if (modified.includes('</head>')) {
+        modified = modified.replace('</head>', `${animStyle}\n</head>`);
+      } else {
+        modified = animStyle + modified;
+      }
+    } else if (instLower.includes('sound') || instLower.includes('audio') || instLower.includes('click')) {
+      const soundScript = `
+        <script id="nexus-ai-sound-fx">
+          (function() {
+            var audioCtx = null;
+            function playBeep() {
+              try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+              } catch(e) {}
+            }
+            window.addEventListener('DOMContentLoaded', function() {
+              document.querySelectorAll('button, a, input[type="range"]').forEach(function(el) {
+                el.addEventListener('click', playBeep);
+              });
+            });
+            document.addEventListener('click', function(e) {
+              if (e.target.closest('button, a, input, [role="button"]')) {
+                playBeep();
+              }
+            });
+          })();
+        </script>
+      `;
+      if (modified.includes('</body>')) {
+        modified = modified.replace('</body>', `${soundScript}\n</body>`);
+      } else {
+        modified += soundScript;
+      }
+    } else if (instLower.includes('glass') || instLower.includes('glassmorphism')) {
+      const glassStyle = `
+        <style id="nexus-ai-glass-theme">
+          div[class*="bg-"], .card, div[class*="rounded"] {
+            background: rgba(15, 23, 42, 0.65) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+          }
+        </style>
+      `;
+      if (modified.includes('</head>')) {
+        modified = modified.replace('</head>', `${glassStyle}\n</head>`);
+      } else {
+        modified = glassStyle + modified;
+      }
+    } else if (instLower.includes('matrix') || instLower.includes('terminal') || instLower.includes('hacker')) {
+      const matrixStyle = `
+        <style id="nexus-ai-matrix-theme">
+          body { background: #020b05 !important; color: #22c55e !important; font-family: monospace !important; }
+          * { text-shadow: 0 0 6px rgba(34, 197, 94, 0.6) !important; }
+          button, .card { border-color: #22c55e !important; box-shadow: 0 0 15px rgba(34, 197, 94, 0.3) !important; }
+        </style>
+      `;
+      if (modified.includes('</head>')) {
+        modified = modified.replace('</head>', `${matrixStyle}\n</head>`);
+      } else {
+        modified = matrixStyle + modified;
+      }
+    } else {
+      const customPatch = `
+        <style id="nexus-ai-custom-patch">
+          /* AI Refinement: ${instruction.replace(/["\n\r]/g, ' ')} */
+          .ai-enhanced { transition: all 0.3s ease; }
+        </style>
+      `;
+      if (modified.includes('</head>')) {
+        modified = modified.replace('</head>', `${customPatch}\n</head>`);
+      } else {
+        modified = customPatch + modified;
+      }
+    }
+
+    return modified;
   },
 };

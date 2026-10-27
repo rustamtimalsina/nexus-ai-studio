@@ -5,8 +5,32 @@
       "destination": "/api/chat"
     },
     {
+      "source": "/api/chats/:id/messages",
+      "destination": "/api/chats"
+    },
+    {
+      "source": "/api/chats/:id",
+      "destination": "/api/chats"
+    },
+    {
       "source": "/api/chat",
       "destination": "/api/chat"
+    },
+    {
+      "source": "/api/workspaces",
+      "destination": "/api/workspaces"
+    },
+    {
+      "source": "/api/prompts",
+      "destination": "/api/prompts"
+    },
+    {
+      "source": "/api/settings",
+      "destination": "/api/settings"
+    },
+    {
+      "source": "/api/chats",
+      "destination": "/api/chats"
     },
     {
       "source": "/((?!api/).*)",
